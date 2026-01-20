@@ -1,0 +1,27 @@
+services:
+  - type: worker
+    name: xero3-0-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    autoDeploy: true
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: PRIVATE_SERVER_IDS
+        sync: false
+      - key: COMMAND_PREFIX
+        sync: false
+      - key: DEBUG
+        sync: false
+      - key: CYPHER_URL
+        sync: false
+      - key: MAPDRAW_URL
+        sync: false
+      - key: WEBHOOK_URL
+        sync: false
+      - key: STATUS_URL
+        sync: false
+      - key: MAPDRAW_STATUS_URL
+        sync: false

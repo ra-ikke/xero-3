@@ -63,6 +63,37 @@ Discord bot built with `discord.py` and native slash commands.
    python bot.py
    ```
 
+## ☁️ Cloud Deployment (Render)
+
+This bot runs as a long‑running process, so use a worker/VM host (not serverless).
+
+### Render (Background Worker)
+
+1. Push this repo to GitHub/GitLab.
+2. In Render, create a **Background Worker**.
+3. Configure:
+   - Build Command: `pip install -r requirements.txt`
+   - Start Command: `python bot.py`
+4. Set environment variables (see below).
+5. Deploy and check logs for a successful login.
+
+### Environment variables
+
+Required:
+- `DISCORD_TOKEN`
+
+Optional:
+- `PRIVATE_SERVER_IDS` (comma separated list of server IDs)
+- `COMMAND_PREFIX`
+- `DEBUG` (`true` or `false`)
+- `CYPHER_URL`
+- `MAPDRAW_URL`
+- `WEBHOOK_URL`
+- `STATUS_URL`
+- `MAPDRAW_STATUS_URL`
+
+> Note: Render free tier may hibernate. If you need 24/7 uptime, consider a paid plan or a VM (e.g., Oracle Always Free).
+
 ## 🔧 Discord Bot Setup
 
 1. Visit the [Discord Developer Portal](https://discord.com/developers/applications)
