@@ -1,0 +1,96 @@
+import discord
+from discord import app_commands
+from discord.ext import commands
+from datetime import datetime, timezone
+
+
+class ServerInfo(commands.Cog):
+    """Cog that exposes the /serverinfo command"""
+    
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+    
+    @app_commands.command(name='serverinfo', description='Shows information about the server')
+    async def serverinfo(self, interaction: discord.Interaction):
+        """Command that shows server information"""
+        guild = interaction.guild
+        
+        if not guild:
+            await interaction.response.send_message(
+                'This command must be run within a server.',
+                ephemeral=True
+            )
+            return
+        
+        embed = discord.Embed(
+            title=f'📊 Information for {guild.name}',
+            color=discord.Color.blue(),
+            timestamp=datetime.now(timezone.utc)
+        )
+        
+        if guild.icon:
+            embed.set_thumbnail(url=guild.icon.url)
+        
+        embed.add_field(
+            name='🆔 ID',
+            value=f'`{guild.id}`',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='👑 Dono',
+            value=f'{guild.owner.mention}' if guild.owner else '`N/A`',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='📅 Created at',
+            value=f'<t:{int(guild.created_at.timestamp())}:F>',
+            inline=False
+        )
+        
+        embed.add_field(
+            name='👥 Members',
+            value=f'`{guild.member_count}`',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='📝 Channels',
+            value=f'`{len(guild.channels)}`',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='🎭 Roles',
+            value=f'`{len(guild.roles)}`',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='😀 Emojis',
+            value=f'`{len(guild.emojis)}`',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='🔒 Verification level',
+            value=f'`{guild.verification_level.name}`',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='🌍 Locale',
+            value=f'`{guild.preferred_locale}`',
+            inline=True
+        )
+        
+        embed.set_footer(text=f'Requested by {interaction.user}', icon_url=interaction.user.display_avatar.url)
+        
+        await interaction.response.send_message(embed=embed)
+
+
+async def setup(bot: commands.Bot):
+    """Function called when the cog loads"""
+    await bot.add_cog(ServerInfo(bot))
+

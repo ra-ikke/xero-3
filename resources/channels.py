@@ -1,0 +1,149 @@
+"""Discord channel IDs used by the bot (ported from the legacy JS resources)."""
+
+# Submission channels (single unified forum)
+#SUBMISSION_FORUM = "1462020193818513490" test
+SUBMISSION_FORUM = "1462122900533415946"
+SUBMISSION_P3 = SUBMISSION_FORUM
+SUBMISSION_P4 = SUBMISSION_FORUM
+SUBMISSION_P5 = SUBMISSION_FORUM
+SUBMISSION_P6 = SUBMISSION_FORUM
+SUBMISSION_P7 = SUBMISSION_FORUM
+SUBMISSION_P8 = SUBMISSION_FORUM
+SUBMISSION_P9 = SUBMISSION_FORUM
+SUBMISSION_P10 = SUBMISSION_FORUM
+SUBMISSION_P11 = SUBMISSION_FORUM
+SUBMISSION_P17 = SUBMISSION_FORUM
+SUBMISSION_P18 = SUBMISSION_FORUM
+SUBMISSION_P24 = SUBMISSION_FORUM
+SUBMISSION_P66 = SUBMISSION_FORUM
+
+# Categories supported by the submission system.
+SUPPORTED_SUBMISSION_CATEGORIES: list[str] = [
+    "P3",
+    "P4",
+    "P5",
+    "P6",
+    "P7",
+    "P8",
+    "P9",
+    "P10",
+    "P11",
+    "P17",
+    "P18",
+    "P24",
+    "P66",
+]
+
+# Convenience mapping (category_code -> channel_id string; may be empty if not configured).
+SUBMISSION_CHANNELS: dict[str, str] = {
+    "P3": SUBMISSION_P3,
+    "P4": SUBMISSION_P4,
+    "P5": SUBMISSION_P5,
+    "P6": SUBMISSION_P6,
+    "P7": SUBMISSION_P7,
+    "P8": SUBMISSION_P8,
+    "P9": SUBMISSION_P9,
+    "P10": SUBMISSION_P10,
+    "P11": SUBMISSION_P11,
+    "P17": SUBMISSION_P17,
+    "P18": SUBMISSION_P18,
+    "P24": SUBMISSION_P24,
+    "P66": SUBMISSION_P66,
+}
+
+# Mapcrew Sharpie channel
+COMMAND = "1131924905223528528"
+
+# Internal discussion channels
+MC_ROTATION = "1128460472610459709"
+MC_SURVIVOR = "1131763279706996786"
+MC_RACING = "1131761404274282496"
+MC_BOOTCAMP = "1131762226852798607"
+MC_DEFILANTE = "1268205975156953142"
+
+# Internal discussion channels (tests)
+# MC_ROTATION = "1460742167143256388"
+# MC_SURVIVOR = "1460749361330786501"
+# MC_RACING = "1460749389608779929"
+# MC_BOOTCAMP = "1460749310390964400"
+# MC_DEFILANTE = "1460749335452061697"
+
+# # Internal channels
+MC_REPORTS = "1267536126353346751"
+MC_DISCUSSION = "1267314076850061312"
+MC_CHANGELOG = "1128456859754430555"
+MC_AUTH = "1461910482012209254"
+# Internal channels (tests)
+# MC_REPORTS = "1460749419484942454"
+# MC_DISCUSSION = "1460743049993781278"
+# MC_CHANGELOG = "1460744735118331978"
+
+# Public perm changes channel (production)
+PERM_CHANGES = "751924112854876230"
+
+# Public perm changes channel (tests)
+# PERM_CHANGES = "1460749258381590620"
+
+# Public review info (production)
+REVIEW_INFO = "1461007252701053019"
+
+# Session manager (production)
+SESSION_MANAGER = "1461578296029479058"
+
+# Public review info (tests)
+# REVIEW_INFO = "1460774247159824414"
+
+# # Public channels (production)
+ROTATION = "751981959663714727"
+SURVIVOR = "751982029788282912"
+RACING = "751982010456604672"
+BOOTCAMP = "751981989783011400"
+DEFILANTE = "751982058993221703"
+REPORT = "1267505165959954452"
+MAP_INFO = "1267235027343642696"
+
+# Public channels (testes)
+# ROTATION = "1460742388044660899"
+# SURVIVOR = "1460748834845098292"
+# RACING = "1460748938851389571"
+# BOOTCAMP = "1460748798400659610"
+# DEFILANTE = "1460748812598513745"
+# REPORT = "1460748980433457252"
+# MAP_INFO = "1460749006908166161"
+
+CHANNELS: dict[str, str] = {
+    "rotation": ROTATION,
+    "survivor": SURVIVOR,
+    "racing": RACING,
+    "bootcamp": BOOTCAMP,
+    "defilante": DEFILANTE,
+    "report": REPORT,
+    "map_info": MAP_INFO,
+    "command": COMMAND,
+    "review_info": REVIEW_INFO,
+    "session_manager": SESSION_MANAGER,
+    "mc_rotation": MC_ROTATION,
+    "mc_survivor": MC_SURVIVOR,
+    "mc_racing": MC_RACING,
+    "mc_bootcamp": MC_BOOTCAMP,
+    "mc_defilante": MC_DEFILANTE,
+    "mc_reports": MC_REPORTS,
+    "mc_discussion": MC_DISCUSSION,
+    "mc_changelog": MC_CHANGELOG,
+    "mc_auth": MC_AUTH,
+    "perm_changes": PERM_CHANGES,
+    "submission_p3": SUBMISSION_P3,
+    "submission_p4": SUBMISSION_P4,
+    "submission_p5": SUBMISSION_P5,
+    "submission_p6": SUBMISSION_P6,
+    "submission_p7": SUBMISSION_P7,
+    "submission_p8": SUBMISSION_P8,
+    "submission_p9": SUBMISSION_P9,
+    "submission_p10": SUBMISSION_P10,
+    "submission_p11": SUBMISSION_P11,
+    "submission_p17": SUBMISSION_P17,
+    "submission_p18": SUBMISSION_P18,
+    "submission_p24": SUBMISSION_P24,
+    "submission_p60": SUBMISSION_P66,
+}
+

@@ -1,0 +1,36 @@
+import discord
+from discord import app_commands
+from discord.ext import commands
+from config import PRIVATE_SERVER_IDS
+
+
+"""Private admin command for authorized servers."""
+
+# Build guild objects for private commands
+_guild_objects = [discord.Object(id=server_id) for server_id in PRIVATE_SERVER_IDS] if PRIVATE_SERVER_IDS else []
+
+
+class Admin(commands.Cog):
+    """Cog that exposes the private /admin command"""
+    
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+    
+    # Apply @app_commands.guilds() only when servers are configured
+    if _guild_objects:
+        @app_commands.command(name='admin', description='Private administrative command (authorized servers only)')
+        @app_commands.guilds(*_guild_objects)
+        async def admin(self, interaction: discord.Interaction):
+            """Example private command"""
+            await interaction.response.send_message(
+                '🔒 This is a private command available only to authorized servers.',
+                ephemeral=True
+            )
+    else:
+        # When no servers are configured, the command is not registered
+        pass
+
+
+async def setup(bot: commands.Bot):
+    """Setup hook for the cog."""
+    await bot.add_cog(Admin(bot))

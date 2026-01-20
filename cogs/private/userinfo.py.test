@@ -1,0 +1,79 @@
+import discord
+from discord import app_commands
+from discord.ext import commands
+from datetime import datetime, timezone
+
+
+class UserInfo(commands.Cog):
+    """Cog that implements the /userinfo command"""
+    
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+    
+    @app_commands.command(name='userinfo', description='Shows information about a user')
+    @app_commands.describe(usuario='The user you want information for')
+    async def userinfo(
+        self,
+        interaction: discord.Interaction,
+        usuario: discord.Member = None
+    ):
+        """Command that shows detailed user information"""
+        # Use the command author by default
+        target = usuario or interaction.user
+        
+        embed = discord.Embed(
+            title=f'👤 Information for {target.display_name}',
+            color=target.color if target.color != discord.Color.default() else discord.Color.blue(),
+            timestamp=datetime.now(timezone.utc)
+        )
+        
+        embed.set_thumbnail(url=target.display_avatar.url)
+        
+        embed.add_field(
+            name='🆔 ID',
+            value=f'`{target.id}`',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='📝 Username',
+            value=f'`{target.name}`',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='🏷️ Display Name',
+            value=f'`{target.display_name}`',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='📅 Account created at',
+            value=f'<t:{int(target.created_at.timestamp())}:F>',
+            inline=False
+        )
+        
+        embed.add_field(
+            name='📥 Joined at',
+            value=f'<t:{int(target.joined_at.timestamp())}:F>' if target.joined_at else '`N/A`',
+            inline=False
+        )
+        
+        if target.roles:
+            roles = [role.mention for role in target.roles[1:]]  # Remove @everyone
+            roles_str = ', '.join(roles) if roles else 'None'
+            embed.add_field(
+                name=f'🎭 Roles ({len(roles)})',
+                value=roles_str if len(roles_str) < 1024 else 'Too many roles to display',
+                inline=False
+            )
+        
+        embed.set_footer(text=f'Requested by {interaction.user}', icon_url=interaction.user.display_avatar.url)
+        
+        await interaction.response.send_message(embed=embed)
+
+
+async def setup(bot: commands.Bot):
+    """Function called when the cog loads"""
+    await bot.add_cog(UserInfo(bot))
+

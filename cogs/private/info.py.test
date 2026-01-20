@@ -1,0 +1,74 @@
+import discord
+from discord import app_commands
+from discord.ext import commands
+from datetime import datetime, timezone
+import sys
+
+
+class Info(commands.Cog):
+    """Cog that exposes the /info command"""
+    
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+    
+    @app_commands.command(name='info', description='Shows information about the bot')
+    async def info(self, interaction: discord.Interaction):
+        """Command that shows bot details"""
+        embed = discord.Embed(
+            title='🤖 Bot Information',
+            color=discord.Color.blue(),
+            timestamp=datetime.now(timezone.utc)
+        )
+        
+        embed.add_field(
+            name='👤 Bot',
+            value=f'{self.bot.user.mention}',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='🆔 ID',
+            value=f'`{self.bot.user.id}`',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='📊 Servers',
+            value=f'`{len(self.bot.guilds)}`',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='👥 Users',
+            value=f'`{len(self.bot.users)}`',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='💻 Python',
+            value=f'`{sys.version.split()[0]}`',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='📦 discord.py',
+            value=f'`{discord.__version__}`',
+            inline=True
+        )
+        
+        embed.add_field(
+            name='⏱️ Uptime',
+            value=f'<t:{int(datetime.now(timezone.utc).timestamp())}:R>',
+            inline=False
+        )
+        
+        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
+        embed.set_footer(text=f'Requested by {interaction.user}', icon_url=interaction.user.display_avatar.url)
+        
+        await interaction.response.send_message(embed=embed)
+
+
+async def setup(bot: commands.Bot):
+    """Function called when the cog is loaded"""
+    await bot.add_cog(Info(bot))
+

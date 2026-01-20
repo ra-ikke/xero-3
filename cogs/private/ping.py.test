@@ -1,0 +1,25 @@
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+
+class Ping(commands.Cog):
+    """Cog that exposes the /ping command"""
+    
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+    
+    @app_commands.command(name='ping', description='Checks the bot latency')
+    async def ping(self, interaction: discord.Interaction):
+        """Command to check latency"""
+        latency = round(self.bot.latency * 1000)
+        await interaction.response.send_message(
+            f'🏓 Pong! Latency: {latency}ms',
+            ephemeral=False
+        )
+
+
+async def setup(bot: commands.Bot):
+    """Called when the cog is loaded"""
+    await bot.add_cog(Ping(bot))
+

@@ -1,0 +1,63 @@
+import discord
+from discord import app_commands
+from discord.ext import commands
+from config import PRIVATE_SERVER_IDS
+
+
+# Create guild objects for private commands
+_guild_objects = [discord.Object(id=server_id) for server_id in PRIVATE_SERVER_IDS] if PRIVATE_SERVER_IDS else []
+
+
+class AuthorizedServers(commands.Cog):
+    """Cog that lists authorized servers for private commands"""
+    
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+    
+    # Apply guild limits only when servers are configured
+    if _guild_objects:
+        @app_commands.command(
+            name='authorized-servers',
+            description='Lists servers authorized for private commands'
+        )
+        @app_commands.guilds(*_guild_objects)
+        async def authorized_servers(self, interaction: discord.Interaction):
+            """Shows the configured private command servers"""
+            if not PRIVATE_SERVER_IDS:
+                await interaction.response.send_message(
+                    'No servers configured for private commands.',
+                    ephemeral=True
+                )
+                return
+            
+            embed = discord.Embed(
+                title='🔒 Authorized Servers',
+                description='Servers that can use private commands:',
+                color=discord.Color.gold()
+            )
+            
+            for server_id in PRIVATE_SERVER_IDS:
+                guild = self.bot.get_guild(server_id)
+                if guild:
+                    embed.add_field(
+                        name=guild.name,
+                        value=f'ID: `{server_id}`',
+                        inline=False
+                    )
+                else:
+                    embed.add_field(
+                        name='Server not found',
+                        value=f'ID: `{server_id}`',
+                        inline=False
+                    )
+            
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+    else:
+        # Skip registration if no servers are configured
+        pass
+
+
+async def setup(bot: commands.Bot):
+    """Sets up this cog"""
+    await bot.add_cog(AuthorizedServers(bot))
+
