@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime
-from io import BytesIO
 from typing import Any, Optional
 
 import discord
@@ -20,7 +18,7 @@ from helpers.submission_facade import (
     _start_new_session_for_panel,
 )
 from helpers.submission_panel import build_submission_panel_embed, parse_panel_footer
-from helpers.validation_utils import has_mapcrew_role, has_public_role, has_votecrew_role
+from helpers.validation_utils import has_mapcrew_role, has_public_role
 from resources.channels import CHANNELS
 
 logger = logging.getLogger(__name__)
@@ -145,10 +143,8 @@ async def _resolve_votecrew_name(
             member = await guild.fetch_member(reviewer_user_id)  # type: ignore[attr-defined]
         except Exception:
             member = None
-    if member and has_votecrew_role(member):
-        if has_public_role(member):
-            return member.display_name
-        return "Private Votecrew"
+    if member:
+        return member.display_name
     return "Unknown Votecrew"
 
 
@@ -211,6 +207,15 @@ async def _update_votecrew_message(
     if not message.embeds:
         return
     embed = message.embeds[0]
+    status_lower = status_text.strip().lower()
+    if status_lower == "published":
+        embed.color = discord.Color.green()
+    elif status_lower == "published manually":
+        embed.color = discord.Color.blue()
+    elif status_lower == "rejected":
+        embed.color = discord.Color.red()
+    else:
+        embed.color = discord.Color.orange()
     fields = list(embed.fields or [])
     embed.clear_fields()
     for field in fields:
@@ -233,36 +238,6 @@ class VotecrewReviewView(discord.ui.View):
         if is_done:
             for item in self.children:
                 item.disabled = True
-
-    @discord.ui.button(
-        label="Download session",
-        style=discord.ButtonStyle.secondary,
-        custom_id="votecrew_review:download",
-    )
-    async def download_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(ephemeral=True)
-        if not _has_manage_permission(interaction):
-            await safe_reply(interaction, "Missing permission (requires `manage_threads` or `manage_messages`).", ephemeral=True)
-            return
-
-        msg = interaction.message
-        if not msg:
-            await safe_reply(interaction, "Could not find the source message.", ephemeral=True)
-            return
-
-        meta = _parse_votecrew_meta(msg)
-        category_code = (meta.get("category") or "").strip() or "UNKNOWN"
-
-        if not msg.attachments:
-            await safe_reply(interaction, "No session payload attached to this request.", ephemeral=True)
-            return
-
-        attachment = msg.attachments[0]
-        data = await attachment.read()
-        today = datetime.utcnow().date().isoformat()
-        filename = f"votecrew_{category_code}_{today}.json"
-        file = discord.File(BytesIO(data), filename=filename)
-        await safe_reply(interaction, "📦 Session export:", ephemeral=True, files=[file])
 
     @discord.ui.button(
         label="Approve review",
@@ -314,10 +289,7 @@ class VotecrewReviewView(discord.ui.View):
         if not isinstance(reviewer_user_id, int):
             reviewer_user_id = None
 
-        reviewer_name = await _resolve_reviewer_name(
-            guild=interaction.guild,
-            reviewer_user_id=reviewer_user_id,
-        )
+        reviewer_name = "Private Member"
         votecrew_name = await _resolve_votecrew_name(
             guild=interaction.guild,
             reviewer_user_id=reviewer_user_id,
@@ -409,3 +381,46 @@ class VotecrewReviewView(discord.ui.View):
 
         await _update_votecrew_message(message=msg, status_text="Published manually", votecrew_name=votecrew_name)
         await safe_reply(interaction, "Marked as published manually.", ephemeral=True)
+
+    @discord.ui.button(
+        label="Reject review",
+        style=discord.ButtonStyle.danger,
+        custom_id="votecrew_review:reject",
+    )
+    async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        if not _has_manage_permission(interaction):
+            await safe_reply(interaction, "Missing permission (requires `manage_threads` or `manage_messages`).", ephemeral=True)
+            return
+
+        msg = interaction.message
+        if not msg:
+            await safe_reply(interaction, "Could not find the source message.", ephemeral=True)
+            return
+
+        meta = _parse_votecrew_meta(msg)
+        if (meta.get("status") or "").lower().startswith("published"):
+            await safe_reply(interaction, "This review is already marked as published.", ephemeral=True)
+            return
+        if (meta.get("status") or "").lower().startswith("rejected"):
+            await safe_reply(interaction, "This review is already marked as rejected.", ephemeral=True)
+            return
+
+        votecrew_name = None
+        try:
+            payload = await _load_payload_from_message(msg)
+            session_obj = payload.get("session") or {}
+            reviewer_user_id = session_obj.get("reviewerUserId")
+            if isinstance(reviewer_user_id, str) and reviewer_user_id.isdigit():
+                reviewer_user_id = int(reviewer_user_id)
+            if not isinstance(reviewer_user_id, int):
+                reviewer_user_id = None
+            votecrew_name = await _resolve_votecrew_name(
+                guild=interaction.guild,
+                reviewer_user_id=reviewer_user_id,
+            )
+        except Exception:
+            votecrew_name = None
+
+        await _update_votecrew_message(message=msg, status_text="Rejected", votecrew_name=votecrew_name)
+        await safe_reply(interaction, "Review rejected.", ephemeral=True)

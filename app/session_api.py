@@ -18,7 +18,7 @@ from aiohttp import web
 
 from helpers.session_export import collect_session_maps, get_session_marker_state, normalize_category_code
 from helpers.auth_token import find_auth_record_by_token
-from helpers.validation_utils import has_mapcrew_role, has_public_role, has_votecrew_role
+from helpers.validation_utils import has_mapcrew_role, has_public_role
 from helpers.submission_facade import (
     build_end_marker_message,
     build_review_parts_from_export_payload_v1,
@@ -59,10 +59,8 @@ async def _resolve_votecrew_name(
                 member = await guild.fetch_member(reviewer_user_id)  # type: ignore[attr-defined]
             except Exception:
                 member = None
-    if member and has_votecrew_role(member):
-        if has_public_role(member):
-            return member.display_name
-        return "Private Votecrew"
+    if member:
+        return member.display_name
     return "Unknown Votecrew"
 
 
