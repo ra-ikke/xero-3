@@ -207,7 +207,7 @@ async def _update_votecrew_message(
 ) -> None:
     if not message.embeds:
         return
-    embed = message.embeds[0]
+    embed = discord.Embed.from_dict(message.embeds[0].to_dict())
     status_lower = status_text.strip().lower()
     if status_lower == "published":
         embed.color = discord.Color.green()
@@ -232,7 +232,7 @@ async def _update_votecrew_message(
             value = decided_by
         embed.add_field(name=name, value=value, inline=field.inline)
     view = VotecrewReviewView(is_done=disable_buttons)
-    await message.edit(embeds=[embed], view=view)
+    await message.edit(embed=embed, view=view)
 
 
 class VotecrewReviewView(discord.ui.View):
