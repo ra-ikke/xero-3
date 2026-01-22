@@ -315,23 +315,15 @@ def build_review_parts_from_export_payload_v1(*, category_code: str, items: list
     return parts
 
 
-async def post_review_results_and_close_thread(
+def build_review_messages_from_parts(
     *,
-    bot: discord.Client,
     category_code: str,
-    thread_id: int,
     session_no: int,
     parts: list[dict[str, Any]],
-    reviewer_name: str = "Session API",
-) -> discord.Message:
-    """Posts the review results into the session thread and closes it."""
-    try:
-        channel = await bot.fetch_channel(int(thread_id))
-    except Exception:
-        channel = None
-    if not isinstance(channel, discord.Thread):
-        raise ValueError("I couldn't access the active session thread.")
-
+    reviewer_name: str,
+    max_chars: int = 1900,
+) -> list[str]:
+    """Builds the text messages for a session review result."""
     # Prefer text messages over embeds for API reviews, to avoid embed size limits (6000 chars).
     def _safe_one_line(text: str, *, max_len: int = 800) -> str:
         s = (text or "").replace("\r", " ").replace("\n", " ").strip()
@@ -373,149 +365,171 @@ async def post_review_results_and_close_thread(
                 out.append(line)
         return out
 
-    def _build_review_messages(*, max_chars: int = 1900) -> list[str]:
-        header = (
-            f"# {category_code} — Session review results (Session #{int(session_no)})\n"
-            f"Reviewed by **{_safe_one_line(reviewer_name, max_len=80)}**"
-        )
-        messages: list[str] = []
-        current = header
+    header = (
+        f"# {category_code} — Session review results (Session #{int(session_no)})\n"
+        f"Reviewed by **{_safe_one_line(reviewer_name, max_len=80)}**"
+    )
+    messages: list[str] = []
+    current = header
 
-        def flush() -> None:
-            nonlocal current
-            if current.strip():
-                messages.append(current.strip())
-            # Next messages should start directly with content (no prefix).
-            current = ""
+    def flush() -> None:
+        nonlocal current
+        if current.strip():
+            messages.append(current.strip())
+        # Next messages should start directly with content (no prefix).
+        current = ""
 
-        def append_block(block: str) -> None:
-            nonlocal current
-            block = block.rstrip()
-            if not block:
-                return
-            # First message carries the full header, subsequent ones just say "(continuação)".
-            sep = "\n\n" if current.strip() else ""
-            candidate = (current + sep + block).strip()
+    def append_block(block: str) -> None:
+        nonlocal current
+        block = block.rstrip()
+        if not block:
+            return
+        # First message carries the full header, subsequent ones just say "(continuação)".
+        sep = "\n\n" if current.strip() else ""
+        candidate = (current + sep + block).strip()
+        if len(candidate) <= max_chars:
+            current = candidate
+            return
+        if current.strip() != header.strip():
+            flush()
+            sep2 = "\n\n" if current.strip() else ""
+            candidate = (current + sep2 + block).strip()
             if len(candidate) <= max_chars:
                 current = candidate
                 return
-            if current.strip() != header.strip():
-                flush()
-                sep2 = "\n\n" if current.strip() else ""
-                candidate = (current + sep2 + block).strip()
-                if len(candidate) <= max_chars:
-                    current = candidate
-                    return
-            # Split by lines if still too large.
-            buf = ""
-            for ln in block.splitlines():
-                ln = ln.rstrip()
-                if not ln:
-                    continue
-                add = (buf + "\n" + ln).strip() if buf else ln
-                sep3 = "\n\n" if current.strip() else ""
-                if len((current + sep3 + add).strip()) <= max_chars:
-                    buf = add
-                    continue
-                if buf:
-                    if current.strip() != header.strip():
-                        flush()
-                    sep4 = "\n\n" if current.strip() else ""
-                    current = (current + sep4 + buf).strip()
-                    flush()
-                    buf = ln
-                else:
-                    truncated = _safe_one_line(ln, max_len=max_chars - 50)
-                    if current.strip() != header.strip():
-                        flush()
-                    sep5 = "\n\n" if current.strip() else ""
-                    current = (current + sep5 + truncated).strip()
-                    flush()
-                    buf = ""
+        # Split by lines if still too large.
+        buf = ""
+        for ln in block.splitlines():
+            ln = ln.rstrip()
+            if not ln:
+                continue
+            add = (buf + "\n" + ln).strip() if buf else ln
+            sep3 = "\n\n" if current.strip() else ""
+            if len((current + sep3 + add).strip()) <= max_chars:
+                buf = add
+                continue
             if buf:
-                sep6 = "\n\n" if current.strip() else ""
-                if len((current + sep6 + buf).strip()) <= max_chars:
-                    current = (current + sep6 + buf).strip()
-                else:
+                if current.strip() != header.strip():
                     flush()
-                    sep7 = "\n\n" if current.strip() else ""
-                    current = (current + sep7 + buf).strip()
-
-        by_title = {str(p.get("title")): p for p in (parts or [])}
-        decision_order = (("left_as_is", "Left as is"), ("p1ed", "P1'ed"), ("will_be_discussed", "Will be discussed"), ("ignored", "Ignored"))
-        cat = _find_category(category_code) or {}
-        decisions = cat.get("decisions") or []
-        if not isinstance(decisions, list) or not decisions:
-            decisions = [d[0] for d in decision_order]
-        order = [label for key, label in decision_order if key in decisions]
-        cat_emoji = str((_find_category(category_code) or {}).get("emoji") or "").strip()
-        left_emoji = str(EMOJI_LIST.get("_P22", "") or "").strip()
-        p1_emoji = str(EMOJI_LIST.get("_P1", "") or "").strip()
-        ignored_emoji = str(EMOJI_LIST.get("_crane", "") or "").strip()
-
-        def _count(title: str) -> int:
-            part = by_title.get(title) or {}
-            items = part.get("content") or []
-            return len(items) if isinstance(items, list) else 0
-
-        count_left = _count("Left as is") if "Left as is" in order else 0
-        count_p1 = _count("P1'ed") if "P1'ed" in order else 0
-        count_discuss = _count("Will be discussed") if "Will be discussed" in order else 0
-        count_ignored = _count("Ignored") if "Ignored" in order else 0
-        count_total = count_left + count_p1 + count_discuss + count_ignored
-        summary_parts: list[str] = [f"Total: {count_total}"]
-        if "Left as is" in order:
-            summary_parts.append(f"Left: {count_left}")
-        if "P1'ed" in order:
-            summary_parts.append(f"P1: {count_p1}")
-        if "Will be discussed" in order:
-            summary_parts.append(f"Discuss: {count_discuss}")
-        if "Ignored" in order:
-            summary_parts.append(f"Ignored: {count_ignored}")
-        summary = f"-# _{' | '.join(summary_parts)}_"
-        append_block(summary)
-        for title in order:
-            part = by_title.get(title) or {}
-            items = part.get("content") or []
-            items = items if isinstance(items, list) else []
-
-            if title == "Left as is":
-                prefix = f"{left_emoji} " if left_emoji else ""
-            elif title == "P1'ed":
-                prefix = f"{p1_emoji} " if p1_emoji else ""
-            elif title == "Will be discussed":
-                prefix = f"{cat_emoji} " if cat_emoji else ""
-            elif title == "Ignored":
-                prefix = f"{ignored_emoji} " if ignored_emoji else ""
+                sep4 = "\n\n" if current.strip() else ""
+                current = (current + sep4 + buf).strip()
+                flush()
+                buf = ln
             else:
-                prefix = ""
-
-            lines: list[str] = [f"### __{prefix}{title}__"]
-            if not items:
-                lines.append("-# None")
+                truncated = _safe_one_line(ln, max_len=max_chars - 50)
+                if current.strip() != header.strip():
+                    flush()
+                sep5 = "\n\n" if current.strip() else ""
+                current = (current + sep5 + truncated).strip()
+                flush()
+                buf = ""
+        if buf:
+            sep6 = "\n\n" if current.strip() else ""
+            if len((current + sep6 + buf).strip()) <= max_chars:
+                current = (current + sep6 + buf).strip()
             else:
-                for it in items:
-                    if not isinstance(it, dict):
-                        continue
-                    code = str(it.get("code") or "").strip() or "?"
-                    author = _safe_one_line(str(it.get("author") or "Unknown"), max_len=120)
-                    raw_comment = str(it.get("comment") or "").strip()
-                    comment_lines = _split_comment(raw_comment, max_total=2000, chunk=850)
-                    if comment_lines:
-                        # First comment line goes on the same line as the author.
-                        first_line = comment_lines[0]
-                        lines.append(f"-# **{code} - {author}** — {first_line}")
-                        for cl in comment_lines[1:]:
-                            lines.append(f"-#   {cl}")
-                    else:
-                        lines.append(f"-# **{code} - {author}**")
+                flush()
+                sep7 = "\n\n" if current.strip() else ""
+                current = (current + sep7 + buf).strip()
 
-            append_block("\n".join(lines))
+    by_title = {str(p.get("title")): p for p in (parts or [])}
+    decision_order = (("left_as_is", "Left as is"), ("p1ed", "P1'ed"), ("will_be_discussed", "Will be discussed"), ("ignored", "Ignored"))
+    cat = _find_category(category_code) or {}
+    decisions = cat.get("decisions") or []
+    if not isinstance(decisions, list) or not decisions:
+        decisions = [d[0] for d in decision_order]
+    order = [label for key, label in decision_order if key in decisions]
+    cat_emoji = str((_find_category(category_code) or {}).get("emoji") or "").strip()
+    left_emoji = str(EMOJI_LIST.get("_P22", "") or "").strip()
+    p1_emoji = str(EMOJI_LIST.get("_P1", "") or "").strip()
+    ignored_emoji = str(EMOJI_LIST.get("_crane", "") or "").strip()
 
-        flush()
-        return [m for m in messages if m.strip() and m.strip() != header.strip()]
+    def _count(title: str) -> int:
+        part = by_title.get(title) or {}
+        items = part.get("content") or []
+        return len(items) if isinstance(items, list) else 0
 
-    chunks = _build_review_messages()
+    count_left = _count("Left as is") if "Left as is" in order else 0
+    count_p1 = _count("P1'ed") if "P1'ed" in order else 0
+    count_discuss = _count("Will be discussed") if "Will be discussed" in order else 0
+    count_ignored = _count("Ignored") if "Ignored" in order else 0
+    count_total = count_left + count_p1 + count_discuss + count_ignored
+    summary_parts: list[str] = [f"Total: {count_total}"]
+    if "Left as is" in order:
+        summary_parts.append(f"Left: {count_left}")
+    if "P1'ed" in order:
+        summary_parts.append(f"P1: {count_p1}")
+    if "Will be discussed" in order:
+        summary_parts.append(f"Discuss: {count_discuss}")
+    if "Ignored" in order:
+        summary_parts.append(f"Ignored: {count_ignored}")
+    summary = f"-# _{' | '.join(summary_parts)}_"
+    append_block(summary)
+    for title in order:
+        part = by_title.get(title) or {}
+        items = part.get("content") or []
+        items = items if isinstance(items, list) else []
+
+        if title == "Left as is":
+            prefix = f"{left_emoji} " if left_emoji else ""
+        elif title == "P1'ed":
+            prefix = f"{p1_emoji} " if p1_emoji else ""
+        elif title == "Will be discussed":
+            prefix = f"{cat_emoji} " if cat_emoji else ""
+        elif title == "Ignored":
+            prefix = f"{ignored_emoji} " if ignored_emoji else ""
+        else:
+            prefix = ""
+
+        lines: list[str] = [f"### __{prefix}{title}__"]
+        if not items:
+            lines.append("-# None")
+        else:
+            for it in items:
+                if not isinstance(it, dict):
+                    continue
+                code = str(it.get("code") or "").strip() or "?"
+                author = _safe_one_line(str(it.get("author") or "Unknown"), max_len=120)
+                raw_comment = str(it.get("comment") or "").strip()
+                comment_lines = _split_comment(raw_comment, max_total=2000, chunk=850)
+                if comment_lines:
+                    # First comment line goes on the same line as the author.
+                    first_line = comment_lines[0]
+                    lines.append(f"-# **{code} - {author}** — {first_line}")
+                    for cl in comment_lines[1:]:
+                        lines.append(f"-#   {cl}")
+                else:
+                    lines.append(f"-# **{code} - {author}**")
+
+        append_block("\n".join(lines))
+
+    flush()
+    return [m for m in messages if m.strip() and m.strip() != header.strip()]
+
+
+async def post_review_results_and_close_thread(
+    *,
+    bot: discord.Client,
+    category_code: str,
+    thread_id: int,
+    session_no: int,
+    parts: list[dict[str, Any]],
+    reviewer_name: str = "Session API",
+) -> discord.Message:
+    """Posts the review results into the session thread and closes it."""
+    try:
+        channel = await bot.fetch_channel(int(thread_id))
+    except Exception:
+        channel = None
+    if not isinstance(channel, discord.Thread):
+        raise ValueError("I couldn't access the active session thread.")
+
+    chunks = build_review_messages_from_parts(
+        category_code=category_code,
+        session_no=session_no,
+        parts=parts,
+        reviewer_name=reviewer_name,
+    )
     if not chunks:
         chunks = [f"**{category_code} — Session review results (Session #{int(session_no)})**\n(no content)"]
 

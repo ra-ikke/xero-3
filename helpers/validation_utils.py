@@ -44,6 +44,11 @@ def has_mapcrew_role(member: discord.Member) -> bool:
     return False
 
 
+def has_votecrew_role(member: discord.Member) -> bool:
+    """Returns True if the member has a Votecrew role."""
+    return any((role.name or "") == "Votecrew" for role in member.roles)
+
+
 def get_display_name(member: discord.Member) -> str:
     """Returns a display name depending on whether the member is public or not."""
     if has_public_role(member):

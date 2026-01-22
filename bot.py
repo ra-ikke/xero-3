@@ -64,10 +64,12 @@ async def main():
         from ui.close_discussion_view import CloseDiscussionView
         from ui.report_actions import ReportActionsViewDiscuss, ReportActionsViewHandle
         from ui.map_submission_view import MapSubmissionPanelView
+        from ui.votecrew_review_view import VotecrewReviewView
         from resources.channels import SUPPORTED_SUBMISSION_CATEGORIES
         bot.add_view(CloseDiscussionView())
         bot.add_view(ReportActionsViewDiscuss())
         bot.add_view(ReportActionsViewHandle())
+        bot.add_view(VotecrewReviewView())
         for code in SUPPORTED_SUBMISSION_CATEGORIES:
             bot.add_view(MapSubmissionPanelView(code))
         logger.info('Registered persistent views')
