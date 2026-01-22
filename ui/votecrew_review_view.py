@@ -218,9 +218,8 @@ async def _update_votecrew_message(
     else:
         embed.color = discord.Color.orange()
     fields = list(embed.fields or [])
-    if decided_by and not any(f.name.lower() == "decision by" for f in fields):
-        fields.append(discord.EmbedField(name="Decision by", value=decided_by, inline=True))
     embed.clear_fields()
+    has_decision_field = False
     for field in fields:
         name = field.name
         value = field.value
@@ -230,7 +229,10 @@ async def _update_votecrew_message(
             value = votecrew_name
         elif decided_by and name.lower() == "decision by":
             value = decided_by
+            has_decision_field = True
         embed.add_field(name=name, value=value, inline=field.inline)
+    if decided_by and not has_decision_field:
+        embed.add_field(name="Decision by", value=decided_by, inline=True)
     view = VotecrewReviewView(is_done=disable_buttons)
     try:
         await message.edit(embed=embed, view=view)
