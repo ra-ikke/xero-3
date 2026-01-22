@@ -413,7 +413,10 @@ async def _handle_post_review(request: web.Request) -> web.StreamResponse:
         if not chunks:
             chunks = [f"**{category_code} — Session review results (Session #{int(current_session_no)})**\n(no content)"]
 
-        payload_bytes = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
+        safe_payload = dict(payload)
+        if "userToken" in safe_payload:
+            safe_payload["userToken"] = "***"
+        payload_bytes = json.dumps(safe_payload, ensure_ascii=False, indent=2).encode("utf-8")
         today = datetime.utcnow().date().isoformat()
         filename = f"votecrew_{category_code}_{today}.json"
         file = discord.File(BytesIO(payload_bytes), filename=filename)

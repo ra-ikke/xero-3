@@ -202,6 +202,7 @@ async def _update_votecrew_message(
     message: discord.Message,
     status_text: str,
     votecrew_name: Optional[str] = None,
+    decided_by: Optional[str] = None,
     disable_buttons: bool = True,
 ) -> None:
     if not message.embeds:
@@ -217,6 +218,8 @@ async def _update_votecrew_message(
     else:
         embed.color = discord.Color.orange()
     fields = list(embed.fields or [])
+    if decided_by and not any(f.name.lower() == "decision by" for f in fields):
+        fields.append(discord.EmbedField(name="Decision by", value=decided_by, inline=True))
     embed.clear_fields()
     for field in fields:
         name = field.name
@@ -225,6 +228,8 @@ async def _update_votecrew_message(
             value = status_text
         elif votecrew_name and name.lower() == "votecrew":
             value = votecrew_name
+        elif decided_by and name.lower() == "decision by":
+            value = decided_by
         embed.add_field(name=name, value=value, inline=field.inline)
     view = VotecrewReviewView(is_done=disable_buttons)
     await message.edit(embeds=[embed], view=view)
@@ -339,7 +344,13 @@ class VotecrewReviewView(discord.ui.View):
             session_no=session_no,
         )
 
-        await _update_votecrew_message(message=msg, status_text="Published", votecrew_name=votecrew_name)
+        decided_by = interaction.user.display_name if isinstance(interaction.user, discord.Member) else str(interaction.user)
+        await _update_votecrew_message(
+            message=msg,
+            status_text="Published",
+            votecrew_name=votecrew_name,
+            decided_by=decided_by,
+        )
         await safe_reply(interaction, f"📣 Results posted in the session thread: {posted.jump_url}", ephemeral=True)
 
     @discord.ui.button(
@@ -379,7 +390,13 @@ class VotecrewReviewView(discord.ui.View):
         except Exception:
             votecrew_name = None
 
-        await _update_votecrew_message(message=msg, status_text="Published manually", votecrew_name=votecrew_name)
+        decided_by = interaction.user.display_name if isinstance(interaction.user, discord.Member) else str(interaction.user)
+        await _update_votecrew_message(
+            message=msg,
+            status_text="Published manually",
+            votecrew_name=votecrew_name,
+            decided_by=decided_by,
+        )
         await safe_reply(interaction, "Marked as published manually.", ephemeral=True)
 
     @discord.ui.button(
@@ -422,5 +439,11 @@ class VotecrewReviewView(discord.ui.View):
         except Exception:
             votecrew_name = None
 
-        await _update_votecrew_message(message=msg, status_text="Rejected", votecrew_name=votecrew_name)
+        decided_by = interaction.user.display_name if isinstance(interaction.user, discord.Member) else str(interaction.user)
+        await _update_votecrew_message(
+            message=msg,
+            status_text="Rejected",
+            votecrew_name=votecrew_name,
+            decided_by=decided_by,
+        )
         await safe_reply(interaction, "Review rejected.", ephemeral=True)

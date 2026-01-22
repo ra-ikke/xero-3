@@ -358,6 +358,12 @@ async def close_discussion_thread(
         await thread.edit(**edit_kwargs)
     except Exception:
         logger.exception("Failed to lock/archive thread %s", thread.id)
+    # Ensure archive is applied (some guilds only lock but don't archive).
+    try:
+        if not bool(getattr(thread, "archived", False)):
+            await thread.edit(archived=True)
+    except Exception:
+        logger.exception("Failed to archive thread %s after closing", thread.id)
 
     p1_emoji = EMOJI_LIST.get("_P1", "")
     decision_text = chosen_line.split("-", 1)[-1].strip()
