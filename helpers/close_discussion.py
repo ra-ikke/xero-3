@@ -479,16 +479,22 @@ async def close_discussion_thread(
     review_embeds: list[discord.Embed] = []
     if notify and original_category_code == "P3":
         review_embeds = await _collect_public_reviews(thread)
+        # Sanitize embeds for public posting (no author/title/footer/fields).
+        sanitized: list[discord.Embed] = []
+        for emb in review_embeds:
+            clean = discord.Embed(description=emb.description or "")
+            sanitized.append(clean)
+        review_embeds = sanitized
 
     if notify and notification_channel_id and map_image_url:
         try:
             notify_channel = await interaction.client.fetch_channel(int(notification_channel_id))
             if isinstance(notify_channel, discord.abc.Messageable):
-                image_file = await _download_url_as_file(map_image_url, f"{map_code}.png")
-                files = [image_file] if image_file else []
                 if review_embeds:
-                    await notify_channel.send(content=notification_content, files=files, embeds=review_embeds)
+                    await notify_channel.send(embeds=review_embeds)
                 else:
+                    image_file = await _download_url_as_file(map_image_url, f"{map_code}.png")
+                    files = [image_file] if image_file else []
                     await notify_channel.send(content=notification_content, files=files)
         except Exception:
             logger.exception("Failed to send notification for %s", map_code)
