@@ -491,7 +491,9 @@ async def close_discussion_thread(
             notify_channel = await interaction.client.fetch_channel(int(notification_channel_id))
             if isinstance(notify_channel, discord.abc.Messageable):
                 if review_embeds:
-                    await notify_channel.send(embeds=review_embeds)
+                    image_file = await _download_url_as_file(map_image_url, f"{map_code}.png")
+                    files = [image_file] if image_file else []
+                    await notify_channel.send(content=notification_content, files=files, embeds=review_embeds)
                 else:
                     image_file = await _download_url_as_file(map_image_url, f"{map_code}.png")
                     files = [image_file] if image_file else []
