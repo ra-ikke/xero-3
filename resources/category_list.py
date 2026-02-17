@@ -313,6 +313,13 @@ CATEGORY_LIST = [
         "color": "#F50000",
     },
     {
+        "name": "P44",
+        "description": "Deleted (P44)",
+        "picture": "https://i.imgur.com/Bu1k0Px.png",
+        "emoji": EMOJI_LIST["_P43"],
+        "color": "#F50000",
+    },
+    {
         "name": "P60",
         "description": "Thematic Test (P60)",
         "picture": "https://i.imgur.com/yJuncPP.png",
@@ -324,7 +331,7 @@ CATEGORY_LIST = [
         "description": "Thematic (P66)",
         "picture": "https://i.imgur.com/yJuncPP.png",
         "emoji": EMOJI_LIST["_P66"],
-        "submissionlimit": -1, # No limit
+        "submissionlimit": -1,  # No limit
         "submissionRules": [
             "Map should meet all P1 and P5 requirements.",
             "The maps will be depermed and stored as soon as their event/season is over.",

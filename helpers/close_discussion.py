@@ -16,6 +16,7 @@ from resources.channels import CHANNELS
 from resources.emoji import EMOJI_LIST
 from resources.get_tag import CATEGORY_TO_GROUP, get_tag_ids
 from resources.status_list import STATUSES_BY_NAME
+from helpers.validation_utils import has_mapcrew_role, has_trial_mapcrew_role
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,21 @@ async def _fetch_discussion_messages(
     return disc_info, poll
 
 
+async def _collect_public_reviews(thread: discord.Thread, *, limit: int = 200) -> list[discord.Embed]:
+    reviews: list[discord.Embed] = []
+    try:
+        async for msg in thread.history(limit=limit, oldest_first=True):
+            if not msg.embeds:
+                continue
+            for embed in msg.embeds:
+                footer_text = getattr(embed.footer, "text", "") if embed.footer else ""
+                if footer_text.strip().lower() == "public_review:p3":
+                    reviews.append(discord.Embed.from_dict(embed.to_dict()))
+    except Exception:
+        logger.exception("Failed to collect public review embeds for thread %s", thread.id)
+    return reviews
+
+
 def _count_votes_from_reactions(message: discord.Message) -> dict[str, int]:
     """
     Returns {emoji_string: vote_count} excluding the bot's own initial reaction.
@@ -146,6 +162,14 @@ async def close_discussion_thread(
     if not isinstance(thread, discord.Thread):
         await interaction.followup.send(
             content="Oops! This action can only be used within a discussion thread.",
+            ephemeral=True,
+        )
+        return
+
+    member = interaction.user if isinstance(interaction.user, discord.Member) else None
+    if not member or not (has_mapcrew_role(member) or has_trial_mapcrew_role(member)):
+        await interaction.followup.send(
+            content="You need the Mapcrew or Trial Mapcrew role to close discussions.",
             ephemeral=True,
         )
         return
@@ -358,6 +382,21 @@ async def close_discussion_thread(
         await thread.edit(**edit_kwargs)
     except Exception:
         logger.exception("Failed to lock/archive thread %s", thread.id)
+    # Ensure lock is applied (some guilds only archive but don't lock).
+    try:
+        if not bool(getattr(thread, "locked", False)):
+            try:
+                await thread.edit(locked=True)
+            except discord.HTTPException as exc:
+                # 50083 = Thread is archived
+                if getattr(exc, "code", None) == 50083:
+                    await thread.edit(archived=False)
+                    await thread.edit(locked=True)
+                    await thread.edit(archived=True)
+                else:
+                    raise
+    except Exception:
+        logger.exception("Failed to lock thread %s after closing", thread.id)
     # Ensure archive is applied (some guilds only lock but don't archive).
     try:
         if not bool(getattr(thread, "archived", False)):
@@ -437,13 +476,20 @@ async def close_discussion_thread(
     if description and description.strip():
         notification_content += f"\n*{description.strip()}*"
 
+    review_embeds: list[discord.Embed] = []
+    if notify and original_category_code == "P3":
+        review_embeds = await _collect_public_reviews(thread)
+
     if notify and notification_channel_id and map_image_url:
         try:
             notify_channel = await interaction.client.fetch_channel(int(notification_channel_id))
             if isinstance(notify_channel, discord.abc.Messageable):
                 image_file = await _download_url_as_file(map_image_url, f"{map_code}.png")
                 files = [image_file] if image_file else []
-                await notify_channel.send(content=notification_content, files=files)
+                if review_embeds:
+                    await notify_channel.send(content=notification_content, files=files, embeds=review_embeds)
+                else:
+                    await notify_channel.send(content=notification_content, files=files)
         except Exception:
             logger.exception("Failed to send notification for %s", map_code)
 

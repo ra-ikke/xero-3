@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import discord
 
@@ -71,6 +72,49 @@ class CloseWithoutNotificationModal(CloseModalBase):
         super().__init__(title="Close discussion", notify=False)
 
 
+class AddPublicReviewModal(discord.ui.Modal):
+    """Modal used to collect a public review for P3 discussions."""
+
+    review = discord.ui.TextInput(
+        label="Public review",
+        placeholder="Write the public review to be shared on close.",
+        required=True,
+        max_length=1500,
+        style=discord.TextStyle.paragraph,
+    )
+
+    def __init__(self):
+        super().__init__(title="Add public review")
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        thread = interaction.channel
+        if not isinstance(thread, discord.Thread):
+            await interaction.followup.send(
+                content="This action can only be used inside a discussion thread.",
+                ephemeral=True,
+            )
+            return
+
+        author_name = interaction.user.display_name if isinstance(interaction.user, discord.Member) else str(interaction.user)
+        embed = discord.Embed(
+            title="Public review",
+            description=str(self.review.value).strip(),
+            color=discord.Color.blurple(),
+        )
+        embed.add_field(name="Author", value=author_name, inline=True)
+        embed.set_footer(text="public_review:P3")
+
+        try:
+            await thread.send(embed=embed)
+        except Exception:
+            logger.exception("Failed to post public review embed in thread %s", thread.id)
+            await interaction.followup.send("Failed to post the public review.", ephemeral=True)
+            return
+
+        await interaction.followup.send("Public review added.", ephemeral=True)
+
+
 class CloseDiscussionView(discord.ui.View):
     """
     Persistent view attached to a controls message inside the discussion thread.
@@ -108,6 +152,40 @@ class CloseDiscussionView(discord.ui.View):
     async def refresh_information(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         await refresh_info(interaction)
+        # Ensure Add public review button exists for P3 discussions.
+        thread = interaction.channel
+        thread_name = thread.name if isinstance(thread, discord.Thread) else ""
+        match = re.search(r"\[(P\d+)\]", thread_name) if thread_name else None
+        if match and match.group(1) == "P3":
+            try:
+                if interaction.message:
+                    await interaction.message.edit(view=CloseDiscussionView())
+            except Exception:
+                logger.exception("Failed to refresh discussion controls view for %s", getattr(thread, "id", None))
+
+    @discord.ui.button(
+        label="Add public review",
+        style=discord.ButtonStyle.secondary,
+        custom_id="discussion_controls:add_public_review",
+    )
+    async def add_public_review(self, interaction: discord.Interaction, button: discord.ui.Button):
+        thread = interaction.channel
+        thread_name = thread.name if isinstance(thread, discord.Thread) else ""
+        if not thread_name:
+            await interaction.response.send_message(
+                content="Could not determine the discussion category.",
+                ephemeral=True,
+            )
+            return
+        match = re.search(r"\[(P\d+)\]", thread_name)
+        category_code = match.group(1) if match else None
+        if category_code != "P3":
+            await interaction.response.send_message(
+                content="Public reviews are only available for P3 discussions.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_modal(AddPublicReviewModal())
 
     @discord.ui.button(
         label="Update map code",
