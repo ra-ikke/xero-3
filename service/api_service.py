@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Dict, Optional
 from urllib.parse import quote
 
@@ -62,6 +63,18 @@ async def draw_map(payload: Dict[str, Any]) -> Optional[str]:
     if not payload:
         logger.error("draw_map called without a payload.")
         return None
+
+    xml = payload.get("xml")
+    if isinstance(xml, str):
+        length_match = re.search(r'<P .*L="(-?\d*\.?\d*)".*/><Z>', xml)
+        if length_match:
+            try:
+                length_value = int(float(length_match.group(1)))
+            except Exception:
+                length_value = None
+            if length_value is not None and length_value < 800:
+                xml = re.sub(r'(<P .*L=")(-?\d*\.?\d*)(".*\/><Z>)', r"\g<1>800\g<3>", xml, count=1)
+                payload["xml"] = xml
 
     logger.debug("POST %s payload=%s", MAPDRAW_URL, payload)
     text = await post_text(MAPDRAW_URL, json_payload=payload, expected_status=200)
