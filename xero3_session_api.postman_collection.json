@@ -1,0 +1,307 @@
+{
+  "info": {
+    "_postman_id": "2d749fa2-977f-4bc1-8657-c4bf66faa495",
+    "name": "xero3.0 Session API",
+    "description": "Collection da Session API local do xero3.0. Configure as variaveis antes de testar os endpoints protegidos.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8765"
+    },
+    {
+      "key": "categoryCode",
+      "value": "p4"
+    },
+    {
+      "key": "sessionApiToken",
+      "value": ""
+    },
+    {
+      "key": "userToken",
+      "value": ""
+    },
+    {
+      "key": "reviewerName",
+      "value": "Maps Reviewer"
+    },
+    {
+      "key": "reviewerUserId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Notes",
+      "item": [
+        {
+          "name": "Como usar esta collection",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/session/{{categoryCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session",
+                "{{categoryCode}}"
+              ]
+            },
+            "description": "A Session API so existe se `SESSION_API_ENABLED=true`. Por padrao ela sobe em `127.0.0.1:8765`. Se `SESSION_API_TOKEN` estiver configurado no bot, os endpoints `/session` e `/session/review` exigem `Authorization: Bearer <token>`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "GET Session",
+      "item": [
+        {
+          "name": "GET /session/{category}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sessionApiToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/session/{{categoryCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session",
+                "{{categoryCode}}"
+              ]
+            },
+            "description": "Retorna a sessao ativa da categoria. Se `sessionApiToken` estiver vazio e a API local nao exigir token, pode remover ou ignorar o header Authorization."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /session?categoryType={category}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sessionApiToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/session?categoryType={{categoryCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session"
+              ],
+              "query": [
+                {
+                  "key": "categoryType",
+                  "value": "{{categoryCode}}"
+                }
+              ]
+            },
+            "description": "Mesmo endpoint de sessao, mas passando a categoria por querystring."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "GET Auth",
+      "item": [
+        {
+          "name": "GET /auth?token={userToken}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth?token={{userToken}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{userToken}}"
+                }
+              ]
+            },
+            "description": "Resolve um token gerado pelo slash command `create_auth_token`."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /auth (Bearer user token)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth"
+              ]
+            },
+            "description": "Alternativa para consultar `/auth` enviando o token do usuario no header Authorization."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "POST Review",
+      "item": [
+        {
+          "name": "POST /session/{category}/review",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sessionApiToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaVersion\": 1,\n  \"reviewer\": \"{{reviewerName}}\",\n  \"session\": {\n    \"category\": \"{{categoryCode}}\",\n    \"reviewerUserId\": {{reviewerUserId}}\n  },\n  \"items\": [\n    {\n      \"code\": \"@1234567\",\n      \"status\": \"approve\",\n      \"comment\": \"Mapa aprovado apos revisao.\",\n      \"category\": \"{{categoryCode}}\"\n    },\n    {\n      \"code\": \"@7654321\",\n      \"status\": \"reject\",\n      \"comment\": \"Mapa recusado por problemas de gameplay.\",\n      \"category\": \"{{categoryCode}}\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/session/{{categoryCode}}/review",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session",
+                "{{categoryCode}}",
+                "review"
+              ]
+            },
+            "description": "Publica o resultado da revisao na thread da sessao ativa e tenta fechar a sessao. Se `SESSION_API_AUTO_CREATE_NEXT_SESSION` estiver ativo, a API tambem pode abrir a proxima sessao automaticamente."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /session/review?categoryType={category}&autoNext=false",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sessionApiToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaVersion\": 1,\n  \"categoryType\": \"{{categoryCode}}\",\n  \"reviewer\": \"{{reviewerName}}\",\n  \"items\": [\n    {\n      \"code\": \"@1234567\",\n      \"status\": \"approve\",\n      \"comment\": \"Aprovado manualmente.\",\n      \"category\": \"{{categoryCode}}\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/session/review?categoryType={{categoryCode}}&autoNext=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session",
+                "review"
+              ],
+              "query": [
+                {
+                  "key": "categoryType",
+                  "value": "{{categoryCode}}"
+                },
+                {
+                  "key": "autoNext",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Mesmo POST de review sem categoria na URL. O parametro `autoNext=false` desliga a abertura automatica da proxima sessao apenas nesta requisicao."
+          },
+          "response": []
+        },
+        {
+          "name": "POST Votecrew Review",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{sessionApiToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaVersion\": 1,\n  \"reviewer\": \"{{reviewerName}}\",\n  \"votecrew\": true,\n  \"postAsPrivate\": false,\n  \"session\": {\n    \"category\": \"{{categoryCode}}\",\n    \"reviewerUserId\": {{reviewerUserId}}\n  },\n  \"items\": [\n    {\n      \"code\": \"@1234567\",\n      \"status\": \"approve\",\n      \"comment\": \"Encaminhado para votecrew.\",\n      \"category\": \"{{categoryCode}}\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/session/{{categoryCode}}/review",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "session",
+                "{{categoryCode}}",
+                "review"
+              ]
+            },
+            "description": "Enfileira a review no canal de votecrew em vez de postar e fechar a thread imediatamente."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

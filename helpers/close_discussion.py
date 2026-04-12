@@ -124,6 +124,73 @@ async def _collect_public_reviews(thread: discord.Thread, *, limit: int = 200) -
     return reviews
 
 
+async def _refetch_thread(bot: discord.Client, thread_id: int) -> Optional[discord.Thread]:
+    try:
+        channel = await bot.fetch_channel(int(thread_id))
+    except Exception:
+        return None
+    return channel if isinstance(channel, discord.Thread) else None
+
+
+async def _close_thread_like_fiffy(
+    bot: discord.Client,
+    thread: discord.Thread,
+    *,
+    applied_tags: Optional[list[discord.ForumTag]] = None,
+    reason: str,
+) -> discord.Thread:
+    active_thread = thread
+
+    if applied_tags is not None:
+        try:
+            await active_thread.edit(applied_tags=applied_tags, reason=reason)
+        except discord.HTTPException as exc:
+            if getattr(exc, "code", None) == 50083:
+                await active_thread.edit(archived=False, reason=reason)
+                await active_thread.edit(applied_tags=applied_tags, reason=reason)
+            else:
+                raise
+        refreshed = await _refetch_thread(bot, active_thread.id)
+        if refreshed is not None:
+            active_thread = refreshed
+
+    try:
+        await active_thread.edit(
+            locked=True,
+            archived=True,
+            reason=reason,
+        )
+    except discord.HTTPException as exc:
+        if getattr(exc, "code", None) == 50083:
+            await active_thread.edit(archived=False, reason=reason)
+            await active_thread.edit(
+                locked=True,
+                archived=True,
+                reason=reason,
+            )
+        else:
+            raise
+
+    refreshed = await _refetch_thread(bot, active_thread.id)
+    if refreshed is not None:
+        active_thread = refreshed
+
+    if not bool(getattr(active_thread, "locked", False)) or not bool(getattr(active_thread, "archived", False)):
+        await active_thread.edit(archived=False, reason=reason)
+        if applied_tags is not None:
+            await active_thread.edit(applied_tags=applied_tags, reason=reason)
+        await active_thread.edit(
+            locked=True,
+            archived=True,
+            reason=reason,
+        )
+        refreshed = await _refetch_thread(bot, active_thread.id)
+        if refreshed is not None:
+            active_thread = refreshed
+
+    return active_thread
+
+
 def _count_votes_from_reactions(message: discord.Message) -> dict[str, int]:
     """
     Returns {emoji_string: vote_count} excluding the bot's own initial reaction.
@@ -372,37 +439,21 @@ async def close_discussion_thread(
         logger.exception("Failed to remove discussion controls for thread %s", thread.id)
 
     parent = thread.parent
-    edit_kwargs: dict = {"locked": True, "archived": True}
+    applied_tags: Optional[list[discord.ForumTag]] = None
     if isinstance(parent, discord.ForumChannel):
         tag_ids = get_tag_ids(original_category, disc_type, "closed") or []
         tag_id_set = set(tag_ids)
         applied_tags = [t for t in parent.available_tags if str(t.id) in tag_id_set]
-        edit_kwargs["applied_tags"] = applied_tags
+    close_reason = f"Closing map discussion {map_code} with status {final_status}"
     try:
-        await thread.edit(**edit_kwargs)
+        thread = await _close_thread_like_fiffy(
+            interaction.client,
+            thread,
+            applied_tags=applied_tags,
+            reason=close_reason,
+        )
     except Exception:
         logger.exception("Failed to lock/archive thread %s", thread.id)
-    # Ensure lock is applied (some guilds only archive but don't lock).
-    try:
-        if not bool(getattr(thread, "locked", False)):
-            try:
-                await thread.edit(locked=True)
-            except discord.HTTPException as exc:
-                # 50083 = Thread is archived
-                if getattr(exc, "code", None) == 50083:
-                    await thread.edit(archived=False)
-                    await thread.edit(locked=True)
-                    await thread.edit(archived=True)
-                else:
-                    raise
-    except Exception:
-        logger.exception("Failed to lock thread %s after closing", thread.id)
-    # Ensure archive is applied (some guilds only lock but don't archive).
-    try:
-        if not bool(getattr(thread, "archived", False)):
-            await thread.edit(archived=True)
-    except Exception:
-        logger.exception("Failed to archive thread %s after closing", thread.id)
 
     p1_emoji = EMOJI_LIST.get("_P1", "")
     decision_text = chosen_line.split("-", 1)[-1].strip()

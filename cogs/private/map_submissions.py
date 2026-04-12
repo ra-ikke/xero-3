@@ -39,7 +39,6 @@ class MapSubmissions(commands.Cog):
             description="Creates/updates submission panels (one per category) inside session_manager.",
         )
         @app_commands.guilds(*_guild_objects)
-        @app_commands.default_permissions(manage_messages=True, manage_threads=True)
         async def setup_submissions_cmd(self, interaction: discord.Interaction) -> None:
             await interaction.response.defer(ephemeral=True)
 

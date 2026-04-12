@@ -170,7 +170,15 @@ async def _handle_get_session(request: web.Request) -> web.StreamResponse:
         or request.query.get("category")
         or ""
     )
+    logger.info(
+        "GET /session received path=%s query=%s match_info=%s raw_category=%r",
+        request.path_qs,
+        dict(request.query),
+        dict(request.match_info),
+        raw_category,
+    )
     category_code = normalize_category_code(raw_category)
+    logger.info("GET /session normalized category raw=%r -> %r", raw_category, category_code)
     if not category_code:
         return web.json_response(
             {"error": "missing_category", "hint": "Use ?categoryType=p4 or /session/P4"},
@@ -185,6 +193,12 @@ async def _handle_get_session(request: web.Request) -> web.StreamResponse:
 
     thread_id = await _find_current_thread_id(bot, category_code=category_code)
     if not thread_id:
+        logger.warning(
+            "GET /session no active thread found for category=%s raw_category=%r query=%s",
+            category_code,
+            raw_category,
+            dict(request.query),
+        )
         return web.json_response({"error": "no_active_session", "category": category_code}, status=404)
 
     try:
@@ -197,6 +211,12 @@ async def _handle_get_session(request: web.Request) -> web.StreamResponse:
     bot_user_id = getattr(getattr(bot, "user", None), "id", None)
     state = await get_session_marker_state(thread=ch, history_limit=5000, bot_user_id=bot_user_id)
     if not state.get("is_active"):
+        logger.warning(
+            "GET /session thread exists but session is inactive category=%s thread_id=%s state=%s",
+            category_code,
+            thread_id,
+            state,
+        )
         return web.json_response({"error": "no_active_session", "category": category_code}, status=404)
 
     try:

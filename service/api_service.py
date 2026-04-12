@@ -75,7 +75,6 @@ async def draw_map(payload: Dict[str, Any]) -> Optional[str]:
             if length_value is not None and length_value < 800:
                 xml = re.sub(r'(<P .*L=")(-?\d*\.?\d*)(".*\/><Z>)', r"\g<1>800\g<3>", xml, count=1)
                 payload["xml"] = xml
-
     logger.debug("POST %s payload=%s", MAPDRAW_URL, payload)
     text = await post_text(MAPDRAW_URL, json_payload=payload, expected_status=200)
     if text is None:

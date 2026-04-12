@@ -694,6 +694,24 @@ def _category_thread_name(category_code: str) -> str:
     return f"{description}"
 
 
+def _thread_matches_category(thread_name: str, *, category_code: str) -> bool:
+    expected = _category_thread_name(category_code).strip()
+    actual = (thread_name or "").strip()
+    if not expected or not actual:
+        return False
+    if actual == expected:
+        return True
+
+    # Accept legacy/shared thread titles like "Mechanism (P6|P12)".
+    actual_upper = actual.upper()
+    expected_upper = expected.upper()
+    category_upper = (category_code or "").strip().upper()
+    if not actual_upper.startswith(expected_upper):
+        return False
+    category_tokens = re.findall(r"P\d+", actual_upper)
+    return category_upper in category_tokens
+
+
 def _category_emoji(category_code: str) -> str:
     cat = _find_category(category_code) or {}
     return str(cat.get("emoji") or "").strip()
@@ -880,13 +898,12 @@ async def _get_forum_channel(client: discord.Client, *, category_code: str) -> d
 async def _find_category_thread(
     forum_channel: discord.ForumChannel, *, category_code: str
 ) -> Optional[discord.Thread]:
-    expected = _category_thread_name(category_code)
     for thread in list(getattr(forum_channel, "threads", []) or []):
-        if getattr(thread, "name", "") == expected:
+        if _thread_matches_category(getattr(thread, "name", ""), category_code=category_code):
             return thread
     try:
         async for thread in forum_channel.archived_threads(limit=100):
-            if getattr(thread, "name", "") == expected:
+            if _thread_matches_category(getattr(thread, "name", ""), category_code=category_code):
                 try:
                     await thread.edit(archived=False, locked=False)
                 except Exception:
