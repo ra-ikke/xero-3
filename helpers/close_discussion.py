@@ -438,6 +438,13 @@ async def close_discussion_thread(
     except Exception:
         logger.exception("Failed to remove discussion controls for thread %s", thread.id)
 
+    p1_emoji = EMOJI_LIST.get("_P1", "")
+    decision_text = chosen_line.split("-", 1)[-1].strip()
+    await interaction.followup.send(
+        content=f"The thread has been closed with option: {decision_text}. {p1_emoji}",
+        ephemeral=False,
+    )
+
     parent = thread.parent
     applied_tags: Optional[list[discord.ForumTag]] = None
     if isinstance(parent, discord.ForumChannel):
@@ -454,13 +461,6 @@ async def close_discussion_thread(
         )
     except Exception:
         logger.exception("Failed to lock/archive thread %s", thread.id)
-
-    p1_emoji = EMOJI_LIST.get("_P1", "")
-    decision_text = chosen_line.split("-", 1)[-1].strip()
-    await interaction.followup.send(
-        content=f"The thread has been closed with option: {decision_text}. {p1_emoji}",
-        ephemeral=False,
-    )
 
     changelog_payload: dict = {
         "code": map_code,
