@@ -282,7 +282,7 @@ def build_review_parts_from_export_payload_v1(*, category_code: str, items: list
 
     def _title_from_decision(decision: Optional[str], *, imported_ignored: bool) -> str:
         d = (decision or "").strip().lower()
-        if imported_ignored or d == "ignored":
+        if d == "ignored":
             return "Ignored"
         if d in ("left_as_is", "left as is"):
             return "Left as is"
@@ -290,6 +290,8 @@ def build_review_parts_from_export_payload_v1(*, category_code: str, items: list
             return "P1'ed"
         if d in ("will_be_discussed", "will be discussed"):
             return "Will be discussed"
+        if imported_ignored:
+            return "Ignored"
         return "Ignored" if imported_ignored else "Left as is"
 
     for it in items or []:

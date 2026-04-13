@@ -85,6 +85,9 @@ Campos principais do body:
 - `session.reviewerUserId`
 - `items[]`
 
+Observacao de comportamento:
+- quando um item trouxer `decision` explicita (`left_as_is`, `p1ed`, `will_be_discussed` ou `ignored`), essa decisao tem prioridade sobre `importedIgnored`
+
 Possiveis erros:
 - `401 unauthorized`
 - `400 invalid_json`

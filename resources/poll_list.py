@@ -61,8 +61,6 @@ OPTIONS_MAPPING: dict[str, dict[str, list[dict[str, str]]]] = {
         "PERM": [
             {"option": "Perm as P3", "type": "PERM"},
             {"option": "Perm as P13", "type": "PERM"},
-            {"option": "Perm as P3 with edits", "type": "PERM"},
-            {"option": "Perm as P13 with edits", "type": "PERM"},
             {"option": "Reject", "type": "REJECT"},
         ],
         "DEPERM": [

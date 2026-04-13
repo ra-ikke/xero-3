@@ -32,6 +32,9 @@ async def sync_commands(bot: discord.Client) -> dict[str, Any]:
     for server_id in PRIVATE_SERVER_IDS:
         guild = discord.Object(id=server_id)
         try:
+            # Mirror public global commands into the private guild for immediate availability,
+            # while keeping guild-only commands synced there as well.
+            bot.tree.copy_global_to(guild=guild)  # type: ignore[attr-defined]
             synced_private = await bot.tree.sync(guild=guild)  # type: ignore[attr-defined]
             summary["private"][str(server_id)] = len(synced_private)
             logger.info("Synced %d private command(s) for guild %s", len(synced_private), server_id)
