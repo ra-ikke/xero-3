@@ -547,6 +547,248 @@ async def post_review_results_and_close_thread(
     assert posted is not None
     return posted
 
+
+async def _wait_for_review_json_upload(
+    interaction: discord.Interaction,
+    *,
+    category_code: str,
+    manager_channel: discord.TextChannel,
+) -> tuple[list[dict[str, Any]], str, Optional[discord.Message]]:
+    await safe_reply(
+        interaction,
+        "Upload a **JSON** review file in this channel (I'll wait for up to 3 minutes).",
+        ephemeral=True,
+    )
+
+    def _check(msg: discord.Message) -> bool:
+        if msg.author.id != interaction.user.id:
+            return False
+        if not msg.attachments:
+            return False
+        if getattr(msg.channel, "id", None) != manager_channel.id:
+            return False
+        filename = (msg.attachments[0].filename or "").lower()
+        return filename.endswith(".json")
+
+    deadline = time.monotonic() + 180
+    parts: Optional[list[dict[str, Any]]] = None
+    reviewer_name: Optional[str] = None
+    upload_msg: Optional[discord.Message] = None
+    while True:
+        timeout = deadline - time.monotonic()
+        if timeout <= 0:
+            await safe_reply(interaction, "Timed out while waiting for the JSON upload.", ephemeral=True)
+            raise TimeoutError("Timed out while waiting for review upload")
+        try:
+            upload_msg = await interaction.client.wait_for("message", check=_check, timeout=timeout)  # type: ignore[arg-type]
+        except Exception as exc:
+            await safe_reply(interaction, "Timed out while waiting for the JSON upload.", ephemeral=True)
+            raise TimeoutError("Timed out while waiting for review upload") from exc
+
+        attachment = upload_msg.attachments[0]
+        try:
+            data = await attachment.read()
+        except Exception:
+            await safe_reply(interaction, "Failed to download the attached file.", ephemeral=True)
+            continue
+
+        try:
+            payload = json.loads((data or b"").decode("utf-8-sig", errors="replace"))
+        except Exception:
+            await safe_reply(interaction, "Invalid JSON file. Please upload a valid review payload.", ephemeral=True)
+            continue
+
+        if not isinstance(payload, dict):
+            await safe_reply(interaction, "Invalid JSON payload (expected an object).", ephemeral=True)
+            continue
+
+        schema_version = payload.get("schemaVersion")
+        if schema_version != 1:
+            await safe_reply(
+                interaction,
+                f"Unsupported schemaVersion: {schema_version}. Expected 1.",
+                ephemeral=True,
+            )
+            continue
+
+        session_obj = payload.get("session") or {}
+        if not isinstance(session_obj, dict):
+            session_obj = {}
+
+        payload_category = (
+            session_obj.get("category")
+            or payload.get("category")
+            or payload.get("categoryType")
+            or ""
+        )
+        if payload_category and str(payload_category).strip().upper() != category_code.upper():
+            await safe_reply(
+                interaction,
+                f"Wrong file category: {payload_category} (expected {category_code}). Please upload the correct JSON.",
+                ephemeral=True,
+            )
+            continue
+
+        items = payload.get("items")
+        if not isinstance(items, list):
+            await safe_reply(interaction, "Invalid JSON payload (missing items list).", ephemeral=True)
+            continue
+
+        parts = build_review_parts_from_export_payload_v1(
+            category_code=category_code,
+            items=[it for it in items if isinstance(it, dict)],
+        )
+
+        reviewer_name = str(payload.get("reviewer") or payload.get("reviewerName") or "").strip()
+        reviewer_user_id = session_obj.get("reviewerUserId")
+        if isinstance(reviewer_user_id, str) and reviewer_user_id.isdigit():
+            reviewer_user_id = int(reviewer_user_id)
+        if not isinstance(reviewer_user_id, int):
+            reviewer_user_id = None
+
+        if reviewer_user_id and interaction.guild:
+            member = interaction.guild.get_member(reviewer_user_id)
+            if not member:
+                try:
+                    member = await interaction.guild.fetch_member(reviewer_user_id)  # type: ignore[attr-defined]
+                except Exception:
+                    member = None
+            if member and has_public_role(member) and has_mapcrew_role(member):
+                reviewer_name = member.display_name
+            else:
+                reviewer_name = "Private Member"
+
+        if not reviewer_name:
+            if isinstance(interaction.user, discord.Member):
+                reviewer_name = get_display_name(interaction.user)
+            else:
+                reviewer_name = "Maps Reviewer"
+
+        return parts, reviewer_name, upload_msg
+
+
+async def _find_session_review_block(
+    thread: discord.Thread,
+    *,
+    category_code: str,
+    session_no: int,
+    bot_user_id: int | None,
+    history_limit: int = 5000,
+) -> tuple[list[discord.Message], Optional[discord.Message]]:
+    review_messages: list[discord.Message] = []
+    end_marker: Optional[discord.Message] = None
+    header_token = f"Session review results (Session #{int(session_no)})"
+    expected_end_marker = build_end_marker_message(category_code=category_code, session_no=int(session_no))
+    capture = False
+
+    async for msg in thread.history(limit=history_limit, oldest_first=True):
+        if bot_user_id and getattr(getattr(msg, "author", None), "id", None) != bot_user_id:
+            continue
+        content = (msg.content or "").strip()
+        if not capture:
+            if header_token in content:
+                capture = True
+                review_messages.append(msg)
+            continue
+        if content == expected_end_marker:
+            end_marker = msg
+            break
+        review_messages.append(msg)
+
+    return review_messages, end_marker
+
+
+async def edit_last_session_review(interaction: discord.Interaction, *, category_code: str) -> None:
+    msg = await _get_panel_message(interaction, category_code)
+    if not msg or not msg.embeds:
+        await safe_reply(interaction, "Could not read the panel message embed.", ephemeral=True)
+        return
+
+    meta = parse_panel_footer(getattr(msg.embeds[0].footer, "text", "") if msg.embeds[0].footer else "")
+    last_session_no = meta.get("last")
+    if not last_session_no:
+        await safe_reply(interaction, "There is no finished session to edit for this category.", ephemeral=True)
+        return
+
+    try:
+        channel = await get_category_thread(interaction.client, category_code=category_code)
+    except Exception:
+        channel = None
+    if not isinstance(channel, discord.Thread):
+        await safe_reply(interaction, "I couldn't access the category thread.", ephemeral=True)
+        return
+
+    manager_channel = interaction.channel
+    if not isinstance(manager_channel, discord.TextChannel):
+        await safe_reply(interaction, "This action must be used from the session manager text channel.", ephemeral=True)
+        return
+
+    try:
+        parts, reviewer_name, upload_msg = await _wait_for_review_json_upload(
+            interaction,
+            category_code=category_code,
+            manager_channel=manager_channel,
+        )
+    except TimeoutError:
+        return
+
+    bot_user_id = getattr(getattr(interaction.client, "user", None), "id", None)
+    review_messages, end_marker = await _find_session_review_block(
+        channel,
+        category_code=category_code,
+        session_no=int(last_session_no),
+        bot_user_id=bot_user_id,
+    )
+    if not review_messages:
+        await safe_reply(
+            interaction,
+            f"Could not find the review messages for Session #{int(last_session_no)}.",
+            ephemeral=True,
+        )
+        return
+
+    chunks = build_review_messages_from_parts(
+        category_code=category_code,
+        session_no=int(last_session_no),
+        parts=parts,
+        reviewer_name=reviewer_name or "Maps Reviewer",
+    )
+    if not chunks:
+        chunks = [f"**{category_code} — Session review results (Session #{int(last_session_no)})**\n(no content)"]
+
+    shared_count = min(len(review_messages), len(chunks))
+    for index in range(shared_count):
+        await review_messages[index].edit(content=chunks[index])
+
+    if len(review_messages) > len(chunks):
+        for extra_message in review_messages[len(chunks) :]:
+            try:
+                await extra_message.delete()
+            except Exception:
+                logger.exception("Failed to delete stale review continuation message %s", extra_message.id)
+    elif len(chunks) > len(review_messages):
+        extra_chunks = chunks[len(review_messages) :]
+        if end_marker is not None and extra_chunks:
+            await end_marker.edit(content=extra_chunks[0])
+            for chunk in extra_chunks[1:]:
+                await channel.send(content=chunk)
+            await channel.send(build_end_marker_message(category_code=category_code, session_no=int(last_session_no)))
+        else:
+            for chunk in extra_chunks:
+                await channel.send(content=chunk)
+
+    try:
+        if upload_msg:
+            await upload_msg.delete()
+    except Exception:
+        logger.exception("Failed to delete the edited review upload message (channel=%s)", getattr(manager_channel, "id", None))
+
+    await safe_reply(
+        interaction,
+        f"✏️ Session #{int(last_session_no)} review updated: {review_messages[0].jump_url}",
+        ephemeral=True,
+    )
+
 def _build_review_results_txt(*, category_code: str, session_no: int, parts: list[dict[str, Any]]) -> tuple[str, bytes]:
     def _section(title: str) -> list[str]:
         part = next((p for p in parts if p.get("title") == title), None)
@@ -1144,121 +1386,14 @@ async def submit_review_and_close_session(interaction: discord.Interaction, *, c
         await safe_reply(interaction, "This action must be used from the session manager text channel.", ephemeral=True)
         return
 
-    await safe_reply(
-        interaction,
-        "Upload a **JSON** review file in this channel (I'll wait for up to 3 minutes).",
-        ephemeral=True,
-    )
-
-    def _check(msg: discord.Message) -> bool:
-        if msg.author.id != interaction.user.id:
-            return False
-        if not msg.attachments:
-            return False
-        if getattr(msg.channel, "id", None) != manager_channel.id:
-            return False
-        filename = (msg.attachments[0].filename or "").lower()
-        return filename.endswith(".json")
-
-    # Keep waiting until we get a JSON payload compatible with POST /session.
-    deadline = time.monotonic() + 180
-    parts: Optional[list[dict[str, Any]]] = None
-    reviewer_name: Optional[str] = None
-    attachment: Optional[discord.Attachment] = None
-    upload_msg: Optional[discord.Message] = None
-    while True:
-        timeout = deadline - time.monotonic()
-        if timeout <= 0:
-            await safe_reply(interaction, "Timed out while waiting for the TXT upload.", ephemeral=True)
-            return
-        try:
-            upload_msg = await interaction.client.wait_for("message", check=_check, timeout=timeout)  # type: ignore[arg-type]
-        except Exception:
-            await safe_reply(interaction, "Timed out while waiting for the TXT upload.", ephemeral=True)
-            return
-
-        attachment = upload_msg.attachments[0]
-        try:
-            data = await attachment.read()
-        except Exception:
-            await safe_reply(interaction, "Failed to download the attached file.", ephemeral=True)
-            continue
-
-        try:
-            payload = json.loads((data or b"").decode("utf-8-sig", errors="replace"))
-        except Exception:
-            await safe_reply(interaction, "Invalid JSON file. Please upload a valid review payload.", ephemeral=True)
-            continue
-
-        if not isinstance(payload, dict):
-            await safe_reply(interaction, "Invalid JSON payload (expected an object).", ephemeral=True)
-            continue
-
-        schema_version = payload.get("schemaVersion")
-        if schema_version != 1:
-            await safe_reply(
-                interaction,
-                f"Unsupported schemaVersion: {schema_version}. Expected 1.",
-                ephemeral=True,
-            )
-            continue
-
-        session_obj = payload.get("session") or {}
-        if not isinstance(session_obj, dict):
-            session_obj = {}
-
-        payload_category = (
-            session_obj.get("category")
-            or payload.get("category")
-            or payload.get("categoryType")
-            or ""
-        )
-        if payload_category and str(payload_category).strip().upper() != category_code.upper():
-            await safe_reply(
-                interaction,
-                f"Wrong file category: {payload_category} (expected {category_code}). Please upload the correct JSON.",
-                ephemeral=True,
-            )
-            continue
-
-        items = payload.get("items")
-        if not isinstance(items, list):
-            await safe_reply(interaction, "Invalid JSON payload (missing items list).", ephemeral=True)
-            continue
-
-        parts = build_review_parts_from_export_payload_v1(
+    try:
+        parts, reviewer_name, upload_msg = await _wait_for_review_json_upload(
+            interaction,
             category_code=category_code,
-            items=[it for it in items if isinstance(it, dict)],
+            manager_channel=manager_channel,
         )
-
-        reviewer_name = str(payload.get("reviewer") or payload.get("reviewerName") or "").strip()
-        reviewer_user_id = session_obj.get("reviewerUserId")
-        if isinstance(reviewer_user_id, str) and reviewer_user_id.isdigit():
-            reviewer_user_id = int(reviewer_user_id)
-        if not isinstance(reviewer_user_id, int):
-            reviewer_user_id = None
-
-        if reviewer_user_id and interaction.guild:
-            member = interaction.guild.get_member(reviewer_user_id)
-            if not member:
-                try:
-                    member = await interaction.guild.fetch_member(reviewer_user_id)  # type: ignore[attr-defined]
-                except Exception:
-                    member = None
-            if member and has_public_role(member) and has_mapcrew_role(member):
-                reviewer_name = member.display_name
-            else:
-                reviewer_name = "Private Member"
-
-        if not reviewer_name:
-            if isinstance(interaction.user, discord.Member):
-                reviewer_name = get_display_name(interaction.user)
-            else:
-                reviewer_name = "Maps Reviewer"
-
-        break
-
-    assert parts is not None
+    except TimeoutError:
+        return
 
     posted = await post_review_results_and_close_thread(
         bot=interaction.client,

@@ -191,6 +191,7 @@ As views persistentes sao registradas em `bot.py`.
 - `map_submissions:{category}:update_category`
 - `map_submissions:{category}:download`
 - `map_submissions:{category}:submit_review`
+- `map_submissions:{category}:edit_last_review`
 - `map_submissions:{category}:toggle_lock`
 
 ## Regras de manutencao desta documentacao

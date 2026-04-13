@@ -8,6 +8,7 @@ import discord
 
 from helpers.interaction_utils import safe_reply
 from helpers.submission_facade import (
+    edit_last_session_review,
     download_session_export,
     get_category_thread,
     get_or_create_category_thread,
@@ -89,6 +90,14 @@ class _SubmitReviewButton(_BaseSubmissionButton):
         if not await self._guard(interaction):
             return
         await submit_review_and_close_session(interaction, category_code=self.category_code)
+
+
+class _EditLastReviewButton(_BaseSubmissionButton):
+    async def callback(self, interaction: discord.Interaction) -> None:  # type: ignore[override]
+        await interaction.response.defer(ephemeral=True)
+        if not await self._guard(interaction):
+            return
+        await edit_last_session_review(interaction, category_code=self.category_code)
 
 
 class _UpdateCategoryButton(_BaseSubmissionButton):
@@ -216,6 +225,14 @@ class MapSubmissionPanelView(discord.ui.View):
                 label="Submit review",
                 style=discord.ButtonStyle.primary,
                 custom_id=f"map_submissions:{category_code}:submit_review",
+                category_code=category_code,
+            )
+        )
+        self.add_item(
+            _EditLastReviewButton(
+                label="Edit last review",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"map_submissions:{category_code}:edit_last_review",
                 category_code=category_code,
             )
         )
