@@ -72,6 +72,7 @@ async def main():
         bot.add_view(VotecrewReviewView())
         for code in SUPPORTED_SUBMISSION_CATEGORIES:
             bot.add_view(MapSubmissionPanelView(code))
+            bot.add_view(MapSubmissionPanelView(code, show_start=False))
         logger.info('Registered persistent views')
 
         # Optional local HTTP API for session JSON export.
