@@ -99,6 +99,8 @@ async def announce_map_status(
     map_code: str,
     category_code: str,
     decision: str,
+    notify: bool = True,
+    description: str | None = None,
 ) -> dict[str, Any]:
     category = _find_category(category_code)
     if not category:
@@ -113,7 +115,7 @@ async def announce_map_status(
 
     group = _category_to_group(category_code)
     notification_channel_id = CHANNELS.get(group) if group else None
-    if not notification_channel_id:
+    if notify and not notification_channel_id:
         raise ValueError("Could not determine the public channel for this category.")
 
     final_status_display = f'**{status_obj["description"]}**'
@@ -121,13 +123,18 @@ async def announce_map_status(
         f'{category["emoji"]} (**{category["name"]}**) — '
         f"{map_author} - {normalized_code} - {final_status_display}"
     )
-    posted = await _send_public_message(
-        client,
-        channel_id=notification_channel_id,
-        content=content,
-        map_code=normalized_code,
-        image_url=image_url,
-    )
+    if description and description.strip():
+        content += f"\n*{description.strip()}*"
+
+    posted: Optional[discord.Message] = None
+    if notify:
+        posted = await _send_public_message(
+            client,
+            channel_id=notification_channel_id,
+            content=content,
+            map_code=normalized_code,
+            image_url=image_url,
+        )
 
     await _send_changelog(
         client,
@@ -135,8 +142,9 @@ async def announce_map_status(
             "code": normalized_code,
             "author": map_author,
             "disc_status": final_status,
-            "notify": True,
+            "notify": bool(notify),
             "category": category["name"],
+            "description": (description or "").strip() or None,
         },
     )
 
@@ -144,7 +152,7 @@ async def announce_map_status(
         "code": normalized_code,
         "author": map_author,
         "status": final_status,
-        "channel_id": int(notification_channel_id),
+        "channel_id": int(notification_channel_id) if notify and notification_channel_id else None,
         "jump_url": getattr(posted, "jump_url", None),
     }
 
@@ -155,6 +163,8 @@ async def announce_map_move(
     map_code: str,
     source_category_code: str,
     target_category_code: str,
+    notify: bool = True,
+    description: str | None = None,
 ) -> dict[str, Any]:
     source_category = _find_category(source_category_code)
     if not source_category:
@@ -168,7 +178,7 @@ async def announce_map_move(
 
     target_group = _category_to_group(target_category_code)
     notification_channel_id = CHANNELS.get(target_group) if target_group else None
-    if not notification_channel_id:
+    if notify and not notification_channel_id:
         raise ValueError("Could not determine the public channel for the target category.")
 
     content = (
@@ -176,13 +186,18 @@ async def announce_map_move(
         f'{target_category["emoji"]} ({target_category["name"]}) — '
         f"{map_author} - {normalized_code} - **Moved to another category**"
     )
-    posted = await _send_public_message(
-        client,
-        channel_id=notification_channel_id,
-        content=content,
-        map_code=normalized_code,
-        image_url=image_url,
-    )
+    if description and description.strip():
+        content += f"\n*{description.strip()}*"
+
+    posted: Optional[discord.Message] = None
+    if notify:
+        posted = await _send_public_message(
+            client,
+            channel_id=notification_channel_id,
+            content=content,
+            map_code=normalized_code,
+            image_url=image_url,
+        )
 
     await _send_changelog(
         client,
@@ -190,9 +205,10 @@ async def announce_map_move(
             "code": normalized_code,
             "author": map_author,
             "disc_status": "MOVE",
-            "notify": True,
+            "notify": bool(notify),
             "original_category": source_category["name"],
             "target_category": target_category["name"],
+            "description": (description or "").strip() or None,
         },
     )
 
@@ -200,6 +216,6 @@ async def announce_map_move(
         "code": normalized_code,
         "author": map_author,
         "status": "MOVE",
-        "channel_id": int(notification_channel_id),
+        "channel_id": int(notification_channel_id) if notify and notification_channel_id else None,
         "jump_url": getattr(posted, "jump_url", None),
     }

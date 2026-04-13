@@ -54,6 +54,8 @@ class AnnounceMap(commands.Cog):
             map_code="Map code. Example: @12345",
             category="Public category where the announcement should be posted",
             decision="Final decision to announce publicly",
+            notify="If false, only the changelog entry will be posted",
+            description="Optional extra description shown like the close-thread modal",
         )
         @app_commands.choices(category=_CATEGORY_CHOICES, decision=_DECISION_CHOICES)
         async def announce_map_cmd(
@@ -62,6 +64,8 @@ class AnnounceMap(commands.Cog):
             map_code: str,
             category: app_commands.Choice[str],
             decision: app_commands.Choice[str],
+            notify: bool = True,
+            description: str | None = None,
         ) -> None:
             await interaction.response.defer(ephemeral=True)
             try:
@@ -70,16 +74,19 @@ class AnnounceMap(commands.Cog):
                     map_code=map_code,
                     category_code=category.value,
                     decision=decision.value,
+                    notify=notify,
+                    description=description,
                 )
             except Exception as exc:
                 await interaction.followup.send(str(exc), ephemeral=True)
                 return
 
-            target = f"<#{int(result['channel_id'])}>"
-            await interaction.followup.send(
-                f"Announcement posted for {result['code']} in {target}.",
-                ephemeral=True,
-            )
+            if notify and result.get("channel_id"):
+                target = f"<#{int(result['channel_id'])}>"
+                message = f"Announcement posted for {result['code']} in {target}."
+            else:
+                message = f"Changelog entry posted for {result['code']} (public announcement skipped)."
+            await interaction.followup.send(message, ephemeral=True)
 
         @app_commands.command(
             name="announce_map_move",
@@ -90,6 +97,8 @@ class AnnounceMap(commands.Cog):
             map_code="Map code. Example: @12345",
             source_category="Original category of the map",
             target_category="Destination category of the map",
+            notify="If false, only the changelog entry will be posted",
+            description="Optional extra description shown like the close-thread modal",
         )
         @app_commands.choices(source_category=_CATEGORY_CHOICES, target_category=_CATEGORY_CHOICES)
         async def announce_map_move_cmd(
@@ -98,6 +107,8 @@ class AnnounceMap(commands.Cog):
             map_code: str,
             source_category: app_commands.Choice[str],
             target_category: app_commands.Choice[str],
+            notify: bool = True,
+            description: str | None = None,
         ) -> None:
             await interaction.response.defer(ephemeral=True)
             try:
@@ -106,16 +117,19 @@ class AnnounceMap(commands.Cog):
                     map_code=map_code,
                     source_category_code=source_category.value,
                     target_category_code=target_category.value,
+                    notify=notify,
+                    description=description,
                 )
             except Exception as exc:
                 await interaction.followup.send(str(exc), ephemeral=True)
                 return
 
-            target = f"<#{int(result['channel_id'])}>"
-            await interaction.followup.send(
-                f"Move announcement posted for {result['code']} in {target}.",
-                ephemeral=True,
-            )
+            if notify and result.get("channel_id"):
+                target = f"<#{int(result['channel_id'])}>"
+                message = f"Move announcement posted for {result['code']} in {target}."
+            else:
+                message = f"Changelog entry posted for {result['code']} move (public announcement skipped)."
+            await interaction.followup.send(message, ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

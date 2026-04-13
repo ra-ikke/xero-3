@@ -141,11 +141,11 @@ O acesso nao deve depender de `default_permissions` nativas de moderacao, a meno
 
 - `cogs/private/announce_map.py`
   - comando: `/announce_map`
-  - descricao: anuncia decisao publica de um mapa sem criar thread de discussao
+  - descricao: anuncia decisao publica de um mapa sem criar thread de discussao; aceita `notify` e `description` opcionais
 
 - `cogs/private/announce_map.py`
   - comando: `/announce_map_move`
-  - descricao: anuncia publicamente a mudanca de categoria de um mapa sem criar thread de discussao
+  - descricao: anuncia publicamente a mudanca de categoria de um mapa sem criar thread de discussao; aceita `notify` e `description` opcionais
 
 - `cogs/private/reopen_discussion.py`
   - comando: `/reopen_discussion`
