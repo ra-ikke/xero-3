@@ -117,7 +117,7 @@ async def _collect_public_reviews(thread: discord.Thread, *, limit: int = 200) -
                 continue
             for embed in msg.embeds:
                 footer_text = getattr(embed.footer, "text", "") if embed.footer else ""
-                if footer_text.strip().lower() == "public_review:p3":
+                if footer_text.strip().lower() in {"public_review:p3", "public_review"}:
                     reviews.append(discord.Embed.from_dict(embed.to_dict()))
     except Exception:
         logger.exception("Failed to collect public review embeds for thread %s", thread.id)
@@ -528,7 +528,7 @@ async def close_discussion_thread(
         notification_content += f"\n*{description.strip()}*"
 
     review_embeds: list[discord.Embed] = []
-    if notify and original_category_code == "P3":
+    if notify:
         review_embeds = await _collect_public_reviews(thread)
         # Sanitize embeds for public posting (no author/title/footer/fields).
         sanitized: list[discord.Embed] = []

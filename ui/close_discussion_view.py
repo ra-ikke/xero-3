@@ -16,8 +16,31 @@ from helpers.discussion_facade import (
 )
 from resources.category_list import CATEGORY_LIST
 from resources.get_tag import CATEGORY_TO_GROUP
+from helpers.validation_utils import has_mapcrew_role, has_trial_mapcrew_role
 
 logger = logging.getLogger(__name__)
+
+
+def _build_public_review_embed(*, review_text: str, author_name: str) -> discord.Embed:
+    embed = discord.Embed(
+        title="Public review",
+        description=review_text.strip(),
+        color=discord.Color.blurple(),
+    )
+    embed.add_field(name="Author", value=author_name, inline=True)
+    embed.set_footer(text="public_review")
+    return embed
+
+
+def _extract_public_review_text(message: discord.Message) -> str:
+    if not message.embeds:
+        return ""
+    return str(message.embeds[0].description or "").strip()
+
+
+def _can_manage_public_review(interaction: discord.Interaction) -> bool:
+    member = interaction.user if isinstance(interaction.user, discord.Member) else None
+    return bool(member and (has_mapcrew_role(member) or has_trial_mapcrew_role(member)))
 
 class CloseModalBase(discord.ui.Modal):
     """Base modal that collects the closing option and optional description."""
@@ -73,7 +96,7 @@ class CloseWithoutNotificationModal(CloseModalBase):
 
 
 class AddPublicReviewModal(discord.ui.Modal):
-    """Modal used to collect a public review for P3 discussions."""
+    """Modal used to collect a public review for discussion threads."""
 
     review = discord.ui.TextInput(
         label="Public review",
@@ -97,22 +120,118 @@ class AddPublicReviewModal(discord.ui.Modal):
             return
 
         author_name = interaction.user.display_name if isinstance(interaction.user, discord.Member) else str(interaction.user)
-        embed = discord.Embed(
-            title="Public review",
-            description=str(self.review.value).strip(),
-            color=discord.Color.blurple(),
+        embed = _build_public_review_embed(
+            review_text=str(self.review.value),
+            author_name=author_name,
         )
-        embed.add_field(name="Author", value=author_name, inline=True)
-        embed.set_footer(text="public_review:P3")
 
         try:
-            await thread.send(embed=embed)
+            await thread.send(embed=embed, view=PublicReviewActionsView())
         except Exception:
             logger.exception("Failed to post public review embed in thread %s", thread.id)
             await interaction.followup.send("Failed to post the public review.", ephemeral=True)
             return
 
         await interaction.followup.send("Public review added.", ephemeral=True)
+
+
+class EditPublicReviewModal(discord.ui.Modal):
+    """Modal used to rewrite an existing public review message."""
+
+    def __init__(self, *, current_text: str):
+        super().__init__(title="Edit public review")
+        self.review = discord.ui.TextInput(
+            label="Public review",
+            placeholder="Rewrite the public review to be shared on close.",
+            required=True,
+            max_length=1500,
+            style=discord.TextStyle.paragraph,
+            default=current_text[:1500],
+        )
+        self.add_item(self.review)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        if not _can_manage_public_review(interaction):
+            await interaction.followup.send(
+                content="You need the Mapcrew or Trial Mapcrew role to edit public reviews.",
+                ephemeral=True,
+            )
+            return
+        message = interaction.message
+        if not message:
+            await interaction.followup.send("Could not locate the public review message.", ephemeral=True)
+            return
+        author_name = interaction.user.display_name if isinstance(interaction.user, discord.Member) else str(interaction.user)
+        embed = _build_public_review_embed(
+            review_text=str(self.review.value),
+            author_name=author_name,
+        )
+        try:
+            await message.edit(embed=embed, view=PublicReviewActionsView())
+        except Exception:
+            logger.exception("Failed to edit public review message %s", getattr(message, "id", None))
+            await interaction.followup.send("Failed to edit the public review.", ephemeral=True)
+            return
+        await interaction.followup.send("Public review updated.", ephemeral=True)
+
+
+class PublicReviewActionsView(discord.ui.View):
+    """Persistent actions attached to public review messages."""
+
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="Edit",
+        style=discord.ButtonStyle.secondary,
+        custom_id="public_review:edit",
+    )
+    async def edit_review(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not _can_manage_public_review(interaction):
+            await interaction.response.send_message(
+                content="You need the Mapcrew or Trial Mapcrew role to edit public reviews.",
+                ephemeral=True,
+            )
+            return
+        message = interaction.message
+        if not message:
+            await interaction.response.send_message(
+                content="Could not locate the public review message.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_modal(
+            EditPublicReviewModal(current_text=_extract_public_review_text(message))
+        )
+
+    @discord.ui.button(
+        label="Delete",
+        style=discord.ButtonStyle.danger,
+        custom_id="public_review:delete",
+    )
+    async def delete_review(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not _can_manage_public_review(interaction):
+            await interaction.response.send_message(
+                content="You need the Mapcrew or Trial Mapcrew role to delete public reviews.",
+                ephemeral=True,
+            )
+            return
+        message = interaction.message
+        if not message:
+            await interaction.response.send_message(
+                content="Could not locate the public review message.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.defer(ephemeral=True)
+        try:
+            await message.delete()
+        except Exception:
+            logger.exception("Failed to delete public review message %s", getattr(message, "id", None))
+            await interaction.followup.send("Failed to delete the public review.", ephemeral=True)
+            return
+        await interaction.followup.send("Public review deleted.", ephemeral=True)
 
 
 class CloseDiscussionView(discord.ui.View):
@@ -152,16 +271,14 @@ class CloseDiscussionView(discord.ui.View):
     async def refresh_information(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
         await refresh_info(interaction)
-        # Ensure Add public review button exists for P3 discussions.
-        thread = interaction.channel
-        thread_name = thread.name if isinstance(thread, discord.Thread) else ""
-        match = re.search(r"\[(P\d+)\]", thread_name) if thread_name else None
-        if match and match.group(1) == "P3":
-            try:
-                if interaction.message:
-                    await interaction.message.edit(view=CloseDiscussionView())
-            except Exception:
-                logger.exception("Failed to refresh discussion controls view for %s", getattr(thread, "id", None))
+        try:
+            if interaction.message:
+                await interaction.message.edit(view=CloseDiscussionView())
+        except Exception:
+            logger.exception(
+                "Failed to refresh discussion controls view for %s",
+                getattr(interaction.channel, "id", None),
+            )
 
     @discord.ui.button(
         label="Add public review",
@@ -174,14 +291,6 @@ class CloseDiscussionView(discord.ui.View):
         if not thread_name:
             await interaction.response.send_message(
                 content="Could not determine the discussion category.",
-                ephemeral=True,
-            )
-            return
-        match = re.search(r"\[(P\d+)\]", thread_name)
-        category_code = match.group(1) if match else None
-        if category_code != "P3":
-            await interaction.response.send_message(
-                content="Public reviews are only available for P3 discussions.",
                 ephemeral=True,
             )
             return

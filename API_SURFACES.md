@@ -139,6 +139,18 @@ O acesso nao deve depender de `default_permissions` nativas de moderacao, a meno
   - comando: `/setup_submissions`
   - descricao: cria ou atualiza paineis de submissao
 
+- `cogs/private/announce_map.py`
+  - comando: `/announce_map`
+  - descricao: anuncia decisao publica de um mapa sem criar thread de discussao
+
+- `cogs/private/announce_map.py`
+  - comando: `/announce_map_move`
+  - descricao: anuncia publicamente a mudanca de categoria de um mapa sem criar thread de discussao
+
+- `cogs/private/reopen_discussion.py`
+  - comando: `/reopen_discussion`
+  - descricao: reabre a thread de discussao atual, restaura os controles e recria a poll se ela nao existir
+
 - `cogs/private/auth_token.py`
   - comando: `/create_auth_token`
   - descricao: gera token para apps externos
@@ -168,6 +180,8 @@ As views persistentes sao registradas em `bot.py`.
 - `discussion_controls:update_mapcode`
 - `discussion_controls:update_category`
 - `discussion_controls:add_poll_option`
+- `public_review:edit`
+- `public_review:delete`
 
 ### `ui/report_actions.py`
 

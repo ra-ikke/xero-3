@@ -61,12 +61,13 @@ async def main():
     # Register persistent views (UI components)
     session_api_runner = None
     try:
-        from ui.close_discussion_view import CloseDiscussionView
+        from ui.close_discussion_view import CloseDiscussionView, PublicReviewActionsView
         from ui.report_actions import ReportActionsViewDiscuss, ReportActionsViewHandle
         from ui.map_submission_view import MapSubmissionPanelView
         from ui.votecrew_review_view import VotecrewReviewView
         from resources.channels import SUPPORTED_SUBMISSION_CATEGORIES
         bot.add_view(CloseDiscussionView())
+        bot.add_view(PublicReviewActionsView())
         bot.add_view(ReportActionsViewDiscuss())
         bot.add_view(ReportActionsViewHandle())
         bot.add_view(VotecrewReviewView())

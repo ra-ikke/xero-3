@@ -146,7 +146,7 @@ class _UpdateCategoryButton(_BaseSubmissionButton):
         except Exception:
             logger.exception("Failed to update panel embed for %s", self.category_code)
 
-        await _send_temp_message(interaction, "✅ Category updated.")
+        await safe_reply(interaction, "✅ Category updated.", ephemeral=True)
 
 
 class _ToggleThreadLockButton(_BaseSubmissionButton):
