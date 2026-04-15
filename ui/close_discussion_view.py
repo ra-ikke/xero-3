@@ -16,8 +16,6 @@ from helpers.discussion_facade import (
 )
 from resources.category_list import CATEGORY_LIST
 from resources.get_tag import CATEGORY_TO_GROUP
-from helpers.validation_utils import has_mapcrew_role, has_trial_mapcrew_role
-
 logger = logging.getLogger(__name__)
 
 
@@ -36,11 +34,6 @@ def _extract_public_review_text(message: discord.Message) -> str:
     if not message.embeds:
         return ""
     return str(message.embeds[0].description or "").strip()
-
-
-def _can_manage_public_review(interaction: discord.Interaction) -> bool:
-    member = interaction.user if isinstance(interaction.user, discord.Member) else None
-    return bool(member and (has_mapcrew_role(member) or has_trial_mapcrew_role(member)))
 
 class CloseModalBase(discord.ui.Modal):
     """Base modal that collects the closing option and optional description."""
@@ -152,12 +145,6 @@ class EditPublicReviewModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
-        if not _can_manage_public_review(interaction):
-            await interaction.followup.send(
-                content="You need the Mapcrew or Trial Mapcrew role to edit public reviews.",
-                ephemeral=True,
-            )
-            return
         message = interaction.message
         if not message:
             await interaction.followup.send("Could not locate the public review message.", ephemeral=True)
@@ -188,12 +175,6 @@ class PublicReviewActionsView(discord.ui.View):
         custom_id="public_review:edit",
     )
     async def edit_review(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not _can_manage_public_review(interaction):
-            await interaction.response.send_message(
-                content="You need the Mapcrew or Trial Mapcrew role to edit public reviews.",
-                ephemeral=True,
-            )
-            return
         message = interaction.message
         if not message:
             await interaction.response.send_message(
@@ -211,12 +192,6 @@ class PublicReviewActionsView(discord.ui.View):
         custom_id="public_review:delete",
     )
     async def delete_review(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not _can_manage_public_review(interaction):
-            await interaction.response.send_message(
-                content="You need the Mapcrew or Trial Mapcrew role to delete public reviews.",
-                ephemeral=True,
-            )
-            return
         message = interaction.message
         if not message:
             await interaction.response.send_message(
