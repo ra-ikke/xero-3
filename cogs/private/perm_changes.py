@@ -10,7 +10,6 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from io import BytesIO
 from typing import Any, Optional
 
 import discord
@@ -116,12 +115,24 @@ def _format_post(items: list[_PermChangeItem]) -> str:
 
 
 def _split_for_discord(content: str, *, max_len: int = 1900) -> list[str]:
-    """Splits large content into chunks <= max_len, preserving line boundaries."""
+    """Splits large content into chunks <= max_len, preserving line boundaries when possible."""
     lines = (content or "").splitlines()
     chunks: list[str] = []
     buf: list[str] = []
     size = 0
     for line in lines:
+        # Single line longer than limit (rare): hard-split so Discord never rejects the payload.
+        if len(line) > max_len:
+            if buf:
+                chunks.append("\n".join(buf))
+                buf = []
+                size = 0
+            start = 0
+            while start < len(line):
+                chunks.append(line[start : start + max_len])
+                start += max_len
+            continue
+
         add = len(line) + (1 if buf else 0)
         if buf and size + add > max_len:
             chunks.append("\n".join(buf))
@@ -254,12 +265,10 @@ class PermChanges(commands.Cog):
             start_dt: datetime
             end_dt: datetime
             header: str
-            filename_suffix: str
 
             if not start_date and not end_date:
                 start_dt, end_dt, month_name = _month_range_utc()
                 header = f"**{parchment} {month_name} Maps Perm Updates:**"
-                filename_suffix = month_name
             else:
                 if end_date and not start_date:
                     await safe_reply(interaction, "Please provide start_date when using end_date.", ephemeral=True)
@@ -285,26 +294,23 @@ class PermChanges(commands.Cog):
                 end_dt = datetime(end_day.year, end_day.month, end_day.day, tzinfo=timezone.utc) + timedelta(days=1)
                 range_text = _range_header(start_day=start_day, end_day_inclusive=end_day)
                 header = f"**{parchment} Perm Updates ({range_text}):**"
-                filename_suffix = f"{start_day.isoformat()}_to_{end_day.isoformat()}"
 
             items = await _retrieve_perm_changes(changelog_channel, start=start_dt, end=end_dt)
             body = _format_post(items)
             content = f"{header}\n\n{body}\n\n{footer}".strip()
 
-            # If too long, post as an attachment to avoid Discord 2000-char limit.
-            if len(content) > 1900:
-                file = discord.File(
-                    BytesIO((body + "\n").encode("utf-8")),
-                    filename=f"perm_changes_{filename_suffix}.txt",
-                )
-                await target_channel.send(content=f"{header}\n\n{footer}", files=[file])
-            else:
-                # Still guard against edge cases by chunking.
-                chunks = _split_for_discord(content, max_len=1900)
-                for i, chunk in enumerate(chunks):
-                    await target_channel.send(content=chunk if i == 0 else chunk)
+            # Discord message limit is 2000 chars; split into several messages instead of a .txt attachment.
+            chunks = _split_for_discord(content, max_len=1900)
+            for chunk in chunks:
+                await target_channel.send(content=chunk)
 
-            await safe_reply(interaction, "Posted!", ephemeral=True)
+            n = len(chunks)
+            msg_word = "mensagem" if n == 1 else "mensagens"
+            await safe_reply(
+                interaction,
+                f"Posted! ({n} {msg_word} no canal perm_changes.)",
+                ephemeral=True,
+            )
 
 
 async def setup(bot: commands.Bot):
