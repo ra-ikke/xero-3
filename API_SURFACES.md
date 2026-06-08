@@ -20,7 +20,7 @@ Por padrao ela escuta em `http://127.0.0.1:8765`.
 
 Autenticacao:
 - `GET /session*` e `POST /session*` exigem `Authorization: Bearer <SESSION_API_TOKEN>` apenas se `SESSION_API_TOKEN` estiver configurado
-- `GET /auth` usa um token de usuario gerado pelo comando `/create_auth_token`
+- `GET /auth` e `POST /discussion` usam um token de usuario gerado pelo comando `/create_auth_token`
 
 ### Endpoints
 
@@ -106,6 +106,51 @@ Possiveis erros:
 
 Mesmo comportamento do endpoint acima, com categoria no path.
 
+#### `POST /discussion`
+
+Cria uma nova thread de discussao de mapa no forum interno.
+
+Autenticacao obrigatoria:
+- query `token=...`
+- ou header `Authorization: Bearer <user_token>`
+
+Body JSON:
+- `mapCode` ou `code`
+- `category`, `categoryType` ou `categoryCode`
+- `discType` ou `disc_type` (`PERM`, `EDIT`, `DEPERM` ou `OTHER`)
+- `description` ou `discDescription` (obrigatorio quando `discType` for `OTHER`)
+- `notify` (booleano, opcional; notifica o servidor publico apenas para `PERM`)
+
+O solicitante e resolvido a partir do token de usuario e aparece como autor no embed da discussao.
+
+Possiveis erros:
+- `400 missing_token`
+- `400 invalid_json`
+- `400 invalid_payload`
+- `400 missing_map_code`
+- `400 missing_category`
+- `400 invalid_category`
+- `400 missing_disc_type`
+- `400 invalid_disc_type`
+- `400 missing_description`
+- `400 cannot_create_discussion`
+- `401 invalid_token`
+- `404 user_not_found`
+- `500 invalid_record`
+
+Resposta esperada:
+- `ok`
+- `threadId`
+- `jumpUrl`
+- `mapCode`
+- `mapAuthor`
+- `category`
+- `discType`
+- `notify`
+- `requestedBy.id`
+- `requestedBy.name`
+- `requestedBy.username`
+
 ### Postman
 
 Collection pronta para importacao:
@@ -182,7 +227,7 @@ As views persistentes sao registradas em `bot.py`.
 - `discussion_controls:add_public_review`
 - `discussion_controls:update_mapcode`
 - `discussion_controls:update_category`
-- `discussion_controls:add_poll_option`
+- `discussion_controls:add_poll_option` — ao escolher `Perm map` ou `Move map`, exige selecao de categoria alvo; opcoes `PERM` sao gravadas como `Perm as Px`
 - `public_review:edit`
 - `public_review:delete`
 

@@ -170,6 +170,87 @@
       ]
     },
     {
+      "name": "POST Discussion",
+      "item": [
+        {
+          "name": "POST /discussion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mapCode\": \"@1234567\",\n  \"category\": \"{{categoryCode}}\",\n  \"discType\": \"PERM\",\n  \"notify\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/discussion",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "discussion"
+              ]
+            },
+            "description": "Cria uma nova discussao de mapa. O token de usuario deve ter sido gerado pelo slash command `create_auth_token`; o solicitante aparece como autor no embed da thread."
+          },
+          "response": []
+        },
+        {
+          "name": "POST /discussion (OTHER)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mapCode\": \"@1234567\",\n  \"categoryType\": \"{{categoryCode}}\",\n  \"discType\": \"OTHER\",\n  \"description\": \"Move from P6 to P7\",\n  \"notify\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/discussion",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "discussion"
+              ]
+            },
+            "description": "Exemplo de discussao com tipo OTHER, que exige `description`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "POST Review",
       "item": [
         {

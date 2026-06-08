@@ -371,11 +371,12 @@ class AddPollDescriptionModal(discord.ui.Modal):
         )
 
 
-class AddPollMoveCategoryView(discord.ui.View):
-    """Ephemeral view used to pick the target category for MOVE options."""
+class AddPollTargetCategoryView(discord.ui.View):
+    """Ephemeral view used to pick the target category for MOVE and PERM options."""
 
-    def __init__(self):
+    def __init__(self, *, option_type: str):
         super().__init__(timeout=180)
+        self._option_type = option_type
 
         options: list[discord.SelectOption] = []
         for code in sorted(CATEGORY_TO_GROUP.keys()):
@@ -395,7 +396,11 @@ class AddPollMoveCategoryView(discord.ui.View):
     async def _on_select(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         code = self.select.values[0]
-        await add_poll_option(interaction, option_type="MOVE", target_category_code=code)
+        await add_poll_option(
+            interaction,
+            option_type=self._option_type,
+            target_category_code=code,
+        )
 
 
 class AddPollOptionView(discord.ui.View):
@@ -422,10 +427,10 @@ class AddPollOptionView(discord.ui.View):
 
     async def _on_select(self, interaction: discord.Interaction):
         option_type = self.select.values[0]
-        if option_type == "MOVE":
+        if option_type in {"MOVE", "PERM"}:
             await interaction.response.send_message(
                 content="Select the target category:",
-                view=AddPollMoveCategoryView(),
+                view=AddPollTargetCategoryView(option_type=option_type),
                 ephemeral=True,
             )
             return

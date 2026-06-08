@@ -510,7 +510,18 @@ async def close_discussion_thread(
     else:
         effective_category = original_category
         effective_code = original_category_code
-        if "P13" in chosen_line and original_category_code == "P3":
+
+        perm_as_match = re.search(r"Perm as (P\d+)", chosen_line, re.IGNORECASE)
+        if perm_as_match:
+            target_code = perm_as_match.group(1).upper()
+            if target_code != original_category_code:
+                target_category = _find_category(target_code)
+                if target_category:
+                    effective_category = target_category
+                    effective_code = target_code
+                    changelog_payload["original_category"] = original_category["name"]
+                    changelog_payload["target_category"] = target_category["name"]
+        elif "P13" in chosen_line and original_category_code == "P3":
             p13 = _find_category("P13")
             if p13:
                 effective_category = p13

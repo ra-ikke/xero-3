@@ -16,6 +16,7 @@ import json
 import discord
 from aiohttp import web
 
+from helpers.discussion import create_discussion
 from helpers.session_export import collect_session_maps, get_session_marker_state, normalize_category_code
 from helpers.auth_token import find_auth_record_by_token
 from helpers.validation_utils import has_mapcrew_role, has_public_role
@@ -32,6 +33,7 @@ from helpers.submission_facade import (
 from helpers.submission_panel import build_submission_panel_embed
 from helpers.submission_panel import parse_panel_footer
 from resources.channels import CHANNELS
+from resources.get_tag import CATEGORY_TO_GROUP
 from ui.votecrew_review_view import VotecrewReviewView
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,49 @@ logger = logging.getLogger(__name__)
 def _env_bool(key: str, default: bool = False) -> bool:
     raw = (os.getenv(key, str(default)) or "").strip().lower()
     return raw in ("1", "true", "yes", "y", "on")
+
+
+_VALID_DISC_TYPES = frozenset({"PERM", "EDIT", "DEPERM", "OTHER"})
+
+
+def _extract_user_token(request: web.Request) -> str:
+    raw_token = (request.query.get("token") or "").strip()
+    auth_header = (request.headers.get("Authorization") or "").strip()
+    if not raw_token and auth_header.lower().startswith("bearer "):
+        raw_token = auth_header.split(" ", 1)[-1].strip()
+    return raw_token
+
+
+async def _resolve_user_from_token(
+    bot: discord.Client,
+    token: str,
+) -> tuple[Optional[discord.User], Optional[dict[str, Any]], Optional[str]]:
+    if not token:
+        return None, None, "missing_token"
+
+    record = await find_auth_record_by_token(bot=bot, token=token)
+    if not record:
+        return None, None, "invalid_token"
+
+    user_id = record.get("user_id")
+    if not isinstance(user_id, int):
+        try:
+            user_id = int(user_id)
+        except Exception:
+            user_id = None
+    if not user_id:
+        return None, None, "invalid_record"
+
+    user = bot.get_user(user_id)
+    if not user:
+        try:
+            user = await bot.fetch_user(user_id)
+        except Exception:
+            user = None
+    if not user:
+        return None, None, "user_not_found"
+
+    return user, record, None
 
 
 async def _resolve_votecrew_name(
@@ -236,37 +281,22 @@ async def _handle_get_session(request: web.Request) -> web.StreamResponse:
 async def _handle_get_auth(request: web.Request) -> web.StreamResponse:
     bot: discord.Client = request.app["bot"]
 
-    raw_token = (request.query.get("token") or "").strip()
-    auth_header = (request.headers.get("Authorization") or "").strip()
-    if not raw_token and auth_header.lower().startswith("bearer "):
-        raw_token = auth_header.split(" ", 1)[-1].strip()
-
+    raw_token = _extract_user_token(request)
     if not raw_token:
         return web.json_response(
             {"error": "missing_token", "hint": "Send ?token=... or Authorization: Bearer <token>"},
             status=400,
         )
 
-    record = await find_auth_record_by_token(bot=bot, token=raw_token)
-    if not record:
+    user, record, error = await _resolve_user_from_token(bot, raw_token)
+    if error == "invalid_token":
         return web.json_response({"error": "invalid_token"}, status=404)
-
-    user_id = record.get("user_id")
-    if not isinstance(user_id, int):
-        try:
-            user_id = int(user_id)
-        except Exception:
-            user_id = None
-    if not user_id:
+    if error == "invalid_record":
         return web.json_response({"error": "invalid_record"}, status=500)
+    if error == "user_not_found" or not user or not record:
+        return web.json_response({"error": "user_not_found"}, status=404)
 
-    # Resolve user + member info.
-    user = bot.get_user(user_id)
-    if not user:
-        try:
-            user = await bot.fetch_user(user_id)
-        except Exception:
-            user = None
+    user_id = int(user.id)
 
     guild_id = record.get("guild_id")
     guild = bot.get_guild(int(guild_id)) if guild_id else None
@@ -312,6 +342,128 @@ async def _handle_get_auth(request: web.Request) -> web.StreamResponse:
             "record": {
                 "created_at": record.get("created_at"),
                 "guild_id": record.get("guild_id"),
+            },
+        },
+        status=200,
+    )
+
+
+async def _handle_post_discussion(request: web.Request) -> web.StreamResponse:
+    bot: discord.Client = request.app["bot"]
+
+    raw_token = _extract_user_token(request)
+    user, record, auth_error = await _resolve_user_from_token(bot, raw_token)
+    if auth_error == "missing_token":
+        return web.json_response(
+            {
+                "error": "missing_token",
+                "hint": "Send ?token=... or Authorization: Bearer <user_token>",
+            },
+            status=400,
+        )
+    if auth_error == "invalid_token":
+        return web.json_response({"error": "invalid_token"}, status=401)
+    if auth_error == "invalid_record":
+        return web.json_response({"error": "invalid_record"}, status=500)
+    if auth_error == "user_not_found" or not user or not record:
+        return web.json_response({"error": "user_not_found"}, status=404)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid_json"}, status=400)
+
+    if not isinstance(payload, dict):
+        return web.json_response({"error": "invalid_payload"}, status=400)
+
+    map_code = str(payload.get("mapCode") or payload.get("code") or "").strip()
+    if not map_code:
+        return web.json_response({"error": "missing_map_code"}, status=400)
+
+    raw_category = str(
+        payload.get("category")
+        or payload.get("categoryType")
+        or payload.get("categoryCode")
+        or ""
+    ).strip()
+    category_code = normalize_category_code(raw_category)
+    if not category_code:
+        return web.json_response({"error": "missing_category"}, status=400)
+    if category_code not in CATEGORY_TO_GROUP:
+        return web.json_response({"error": "invalid_category", "category": category_code}, status=400)
+
+    raw_disc_type = str(payload.get("discType") or payload.get("disc_type") or "").strip().upper()
+    if not raw_disc_type:
+        return web.json_response({"error": "missing_disc_type"}, status=400)
+    if raw_disc_type not in _VALID_DISC_TYPES:
+        return web.json_response(
+            {
+                "error": "invalid_disc_type",
+                "hint": "Use PERM, EDIT, DEPERM or OTHER.",
+                "discType": raw_disc_type,
+            },
+            status=400,
+        )
+
+    if raw_disc_type == "OTHER":
+        disc_description = str(
+            payload.get("description") or payload.get("discDescription") or ""
+        ).strip()
+        if not disc_description:
+            return web.json_response(
+                {
+                    "error": "missing_description",
+                    "hint": "description is required when discType is OTHER.",
+                },
+                status=400,
+            )
+        disc_type = disc_description
+    else:
+        disc_type = raw_disc_type
+
+    notify = bool(payload.get("notify"))
+
+    result = await create_discussion(
+        client=bot,
+        map_code=map_code,
+        category_code=category_code,
+        disc_type=disc_type,
+        notify=notify,
+        user=user,
+        interaction=None,
+    )
+
+    if not result.get("success"):
+        return web.json_response(
+            {
+                "error": "cannot_create_discussion",
+                "detail": result.get("error") or "Failed to create discussion.",
+            },
+            status=400,
+        )
+
+    thread = result.get("thread")
+    map_data = result.get("map_data") or {}
+    display_name = (
+        getattr(user, "global_name", None)
+        or getattr(user, "display_name", None)
+        or str(user)
+    )
+
+    return web.json_response(
+        {
+            "ok": True,
+            "threadId": int(thread.id) if thread else None,
+            "jumpUrl": getattr(thread, "jump_url", None) if thread else None,
+            "mapCode": map_data.get("code"),
+            "mapAuthor": map_data.get("author"),
+            "category": category_code,
+            "discType": disc_type,
+            "notify": notify,
+            "requestedBy": {
+                "id": int(user.id),
+                "name": display_name,
+                "username": str(user),
             },
         },
         status=200,
@@ -550,6 +702,7 @@ async def start_session_api(bot: discord.Client) -> Optional[web.AppRunner]:
     app.router.add_get("/auth", _handle_get_auth)
     app.router.add_post("/session/review", _handle_post_review)
     app.router.add_post("/session/{category}/review", _handle_post_review)
+    app.router.add_post("/discussion", _handle_post_discussion)
 
     runner = web.AppRunner(app)
     await runner.setup()

@@ -107,13 +107,7 @@ async def add_discussion_option(
         )
         return
 
-    if option_type == "MOVE":
-        if not target_category_code:
-            await interaction.followup.send(
-                content="For the 'MOVE' option type, you must select a target category.",
-                ephemeral=True,
-            )
-            return
+    if option_type in {"MOVE", "PERM"} and target_category_code:
         cat = _find_category(target_category_code.strip().upper())
         if not cat:
             await interaction.followup.send(
@@ -121,7 +115,16 @@ async def add_discussion_option(
                 ephemeral=True,
             )
             return
-        dynamic_description = f"Move to {cat.get('description', cat.get('name', target_category_code))}"
+        if option_type == "MOVE":
+            dynamic_description = f"Move to {cat.get('description', cat.get('name', target_category_code))}"
+        else:
+            dynamic_description = f"Perm as {cat.get('name', target_category_code)}"
+    elif option_type in {"MOVE", "PERM"}:
+        await interaction.followup.send(
+            content=f"For the '{option_type}' option type, you must select a target category.",
+            ephemeral=True,
+        )
+        return
     else:
         if not description or not description.strip():
             await interaction.followup.send(
