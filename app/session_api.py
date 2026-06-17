@@ -19,7 +19,7 @@ from aiohttp import web
 from helpers.discussion import create_discussion
 from helpers.session_export import collect_session_maps, get_session_marker_state, normalize_category_code
 from helpers.auth_token import find_auth_record_by_token
-from helpers.validation_utils import has_mapcrew_role, has_public_role
+from helpers.validation_utils import has_mapcrew_role, has_public_role, validate_map_code
 from helpers.submission_facade import (
     build_end_marker_message,
     build_review_parts_from_export_payload_v1,
@@ -32,8 +32,10 @@ from helpers.submission_facade import (
 )
 from helpers.submission_panel import build_submission_panel_embed
 from helpers.submission_panel import parse_panel_footer
+from resources.category_list import CATEGORY_LIST
 from resources.channels import CHANNELS
 from resources.get_tag import CATEGORY_TO_GROUP
+from service.map_service import draw_map_png, draw_map_url, fetch_map
 from ui.votecrew_review_view import VotecrewReviewView
 
 logger = logging.getLogger(__name__)
@@ -53,6 +55,17 @@ def _extract_user_token(request: web.Request) -> str:
     if not raw_token and auth_header.lower().startswith("bearer "):
         raw_token = auth_header.split(" ", 1)[-1].strip()
     return raw_token
+
+
+def _normalize_mapcode_from_path(raw: str) -> tuple[Optional[str], Optional[str]]:
+    validation = validate_map_code((raw or "").strip(), min_digits=1)
+    if not validation.is_valid:
+        return None, "invalid_map_code"
+    return validation.formatted_code, None
+
+
+def _find_category_for_map_type(map_type: str) -> Optional[dict[str, Any]]:
+    return next((cat for cat in CATEGORY_LIST if cat.get("name") == map_type), None)
 
 
 async def _resolve_user_from_token(
@@ -276,6 +289,77 @@ async def _handle_get_session(request: web.Request) -> web.StreamResponse:
         return web.json_response({"error": "failed_to_collect"}, status=500)
 
     return web.json_response(data, status=200)
+
+
+async def _handle_get_map(request: web.Request) -> web.StreamResponse:
+    raw_mapcode = request.match_info.get("mapcode") or ""
+    code, error = _normalize_mapcode_from_path(raw_mapcode)
+    if error or not code:
+        return web.json_response({"error": error or "invalid_map_code"}, status=400)
+
+    try:
+        map_data = await fetch_map(code)
+    except Exception:
+        logger.exception("Failed to fetch map %s", code)
+        return web.json_response({"error": "failed_to_fetch", "map": code}, status=500)
+
+    if not map_data:
+        return web.json_response({"error": "map_not_found", "map": code}, status=404)
+
+    payload = {"code": code, "xml": map_data.xml, "raw": False}
+    image_url = await draw_map_url(payload)
+    if not image_url or not isinstance(image_url, str) or not image_url.startswith("http"):
+        image_url = None
+
+    category = _find_category_for_map_type(map_data.map_type)
+    category_name = category.get("name") if category else (map_data.map_type or None)
+    category_emoji = category.get("emoji") if category else None
+
+    return web.json_response(
+        {
+            "status": "received",
+            "content": {
+                "map": code,
+                "author": map_data.maker or "Unknown Author",
+                "category": category_name,
+                "xml": map_data.xml,
+            },
+            "imageUrl": image_url,
+            "categoryEmoji": category_emoji,
+        },
+        status=200,
+    )
+
+
+async def _handle_get_map_image(request: web.Request) -> web.StreamResponse:
+    raw_mapcode = request.match_info.get("mapcode") or ""
+    code, error = _normalize_mapcode_from_path(raw_mapcode)
+    if error or not code:
+        return web.json_response({"error": error or "invalid_map_code"}, status=400)
+
+    try:
+        map_data = await fetch_map(code)
+    except Exception:
+        logger.exception("Failed to fetch map %s", code)
+        return web.json_response({"error": "failed_to_fetch", "map": code}, status=500)
+
+    if not map_data:
+        return web.json_response({"error": "map_not_found", "map": code}, status=404)
+
+    payload = {"code": code, "xml": map_data.xml, "raw": False}
+    fmt = (request.query.get("format") or "png").strip().lower()
+
+    if fmt == "url":
+        image_url = await draw_map_url(payload)
+        if not image_url or not isinstance(image_url, str):
+            return web.json_response({"error": "failed_to_render", "map": code}, status=500)
+        return web.Response(text=image_url, content_type="text/plain", status=200)
+
+    png = await draw_map_png(payload)
+    if not png:
+        return web.json_response({"error": "failed_to_render", "map": code}, status=500)
+
+    return web.Response(body=png, content_type="image/png", status=200)
 
 
 async def _handle_get_auth(request: web.Request) -> web.StreamResponse:
@@ -700,6 +784,8 @@ async def start_session_api(bot: discord.Client) -> Optional[web.AppRunner]:
     app.router.add_get("/session", _handle_get_session)
     app.router.add_get("/session/{category}", _handle_get_session)
     app.router.add_get("/auth", _handle_get_auth)
+    app.router.add_get("/map/{mapcode}/image", _handle_get_map_image)
+    app.router.add_get("/map/{mapcode}", _handle_get_map)
     app.router.add_post("/session/review", _handle_post_review)
     app.router.add_post("/session/{category}/review", _handle_post_review)
     app.router.add_post("/discussion", _handle_post_discussion)

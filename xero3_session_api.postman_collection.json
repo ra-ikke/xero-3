@@ -23,6 +23,10 @@
       "value": ""
     },
     {
+      "key": "mapCode",
+      "value": "@1234567"
+    },
+    {
       "key": "reviewerName",
       "value": "Maps Reviewer"
     },
@@ -164,6 +168,77 @@
               ]
             },
             "description": "Alternativa para consultar `/auth` enviando o token do usuario no header Authorization."
+          },
+          "response": []
+        }
+      ]
+    },
+    },
+    {
+      "name": "GET Map",
+      "item": [
+        {
+          "name": "GET /map/{mapcode}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/map/{{mapCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "map",
+                "{{mapCode}}"
+              ]
+            },
+            "description": "Retorna metadados do mapa (autor, categoria, XML e URL da preview). Equivalente ao slash command `/map_info`."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /map/{mapcode}/image",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/map/{{mapCode}}/image",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "map",
+                "{{mapCode}}",
+                "image"
+              ]
+            },
+            "description": "Retorna a preview do mapa como PNG (`format=png`, padrao)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /map/{mapcode}/image?format=url",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/map/{{mapCode}}/image?format=url",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "map",
+                "{{mapCode}}",
+                "image"
+              ],
+              "query": [
+                {
+                  "key": "format",
+                  "value": "url"
+                }
+              ]
+            },
+            "description": "Retorna a URL da preview como texto plano (compativel com o legado do xero-ingame)."
           },
           "response": []
         }

@@ -21,6 +21,7 @@ Por padrao ela escuta em `http://127.0.0.1:8765`.
 Autenticacao:
 - `GET /session*` e `POST /session*` exigem `Authorization: Bearer <SESSION_API_TOKEN>` apenas se `SESSION_API_TOKEN` estiver configurado
 - `GET /auth` e `POST /discussion` usam um token de usuario gerado pelo comando `/create_auth_token`
+- `GET /map*` nao exige autenticacao (equivalente publico ao `/map_info`)
 
 ### Endpoints
 
@@ -150,6 +151,45 @@ Resposta esperada:
 - `requestedBy.id`
 - `requestedBy.name`
 - `requestedBy.username`
+
+#### `GET /map/{mapcode}`
+
+Retorna metadados do mapa (mesma base do comando `/map_info`).
+
+Entrada:
+- path `mapcode` (ex.: `@1234567` ou `1234567`; use `%40` na URL se necessario)
+
+Resposta esperada:
+- `status` (`received`)
+- `content.map`
+- `content.author`
+- `content.category`
+- `content.xml`
+- `imageUrl` (URL da preview via Mapdraw, quando disponivel)
+- `categoryEmoji`
+
+Possiveis erros:
+- `400 invalid_map_code`
+- `404 map_not_found`
+- `500 failed_to_fetch`
+
+#### `GET /map/{mapcode}/image`
+
+Retorna a preview renderizada do mapa.
+
+Entrada:
+- path `mapcode`
+- query opcional `format=png` (padrao) ou `format=url`
+
+Comportamento:
+- `format=png`: corpo binario `image/png`
+- `format=url`: texto plano com a URL da imagem (compativel com o legado do xero-ingame)
+
+Possiveis erros:
+- `400 invalid_map_code`
+- `404 map_not_found`
+- `500 failed_to_fetch`
+- `500 failed_to_render`
 
 ### Postman
 
