@@ -15,8 +15,25 @@ from helpers.discussion_facade import (
     update_map_code,
 )
 from resources.category_list import CATEGORY_LIST
-from resources.get_tag import CATEGORY_TO_GROUP
+from resources.get_tag import CATEGORY_TO_GROUP, RACING_DISCUSSION_CODES, category_codes_for_group
 logger = logging.getLogger(__name__)
+
+
+def _category_codes_for_thread(thread: discord.Thread | None) -> list[str]:
+    """Limits category pickers to the current discussion group (e.g. racing -> P17/P27/P37)."""
+    if not isinstance(thread, discord.Thread):
+        return sorted(CATEGORY_TO_GROUP.keys(), key=lambda code: int(code[1:]))
+
+    match = re.search(r"\[(P\d+)\]", thread.name or "")
+    if not match:
+        return sorted(CATEGORY_TO_GROUP.keys(), key=lambda code: int(code[1:]))
+
+    group = CATEGORY_TO_GROUP.get(match.group(1))
+    if group == "racing":
+        return sorted(RACING_DISCUSSION_CODES, key=lambda code: int(code[1:]))
+    if group:
+        return category_codes_for_group(group)
+    return sorted(CATEGORY_TO_GROUP.keys(), key=lambda code: int(code[1:]))
 
 
 def _build_public_review_embed(*, review_text: str, author_name: str) -> discord.Embed:
@@ -285,9 +302,10 @@ class CloseDiscussionView(discord.ui.View):
         custom_id="discussion_controls:update_category",
     )
     async def update_category(self, interaction: discord.Interaction, button: discord.ui.Button):
+        thread = interaction.channel if isinstance(interaction.channel, discord.Thread) else None
         await interaction.response.send_message(
             content="Select the new category code for this discussion:",
-            view=UpdateCategorySelectView(),
+            view=UpdateCategorySelectView(category_codes=_category_codes_for_thread(thread)),
             ephemeral=True,
         )
 
@@ -325,13 +343,15 @@ class UpdateMapCodeModal(discord.ui.Modal):
 class UpdateCategorySelectView(discord.ui.View):
     """Ephemeral view used to choose the new category code."""
 
-    def __init__(self):
+    def __init__(self, *, category_codes: list[str] | None = None):
         super().__init__(timeout=120)
 
+        codes = category_codes or sorted(CATEGORY_TO_GROUP.keys(), key=lambda code: int(code[1:]))
         options: list[discord.SelectOption] = []
-        # Limit to categories that have discussion groups (fits in a single select).
-        for code in sorted(CATEGORY_TO_GROUP.keys()):
-            options.append(discord.SelectOption(label=code, value=code))
+        for code in codes:
+            cat = next((c for c in CATEGORY_LIST if c.get("name") == code), None)
+            label = cat.get("description", code) if cat else code
+            options.append(discord.SelectOption(label=label, value=code))
 
         self.select = discord.ui.Select(
             placeholder="Select category (P-code)",
@@ -374,12 +394,13 @@ class AddPollDescriptionModal(discord.ui.Modal):
 class AddPollTargetCategoryView(discord.ui.View):
     """Ephemeral view used to pick the target category for MOVE and PERM options."""
 
-    def __init__(self, *, option_type: str):
+    def __init__(self, *, option_type: str, category_codes: list[str] | None = None):
         super().__init__(timeout=180)
         self._option_type = option_type
 
+        codes = category_codes or sorted(CATEGORY_TO_GROUP.keys(), key=lambda code: int(code[1:]))
         options: list[discord.SelectOption] = []
-        for code in sorted(CATEGORY_TO_GROUP.keys()):
+        for code in codes:
             cat = next((c for c in CATEGORY_LIST if c.get("name") == code), None)
             label = cat.get("description", code) if cat else code
             options.append(discord.SelectOption(label=label, value=code))
@@ -428,9 +449,13 @@ class AddPollOptionView(discord.ui.View):
     async def _on_select(self, interaction: discord.Interaction):
         option_type = self.select.values[0]
         if option_type in {"MOVE", "PERM"}:
+            thread = interaction.channel if isinstance(interaction.channel, discord.Thread) else None
             await interaction.response.send_message(
                 content="Select the target category:",
-                view=AddPollTargetCategoryView(option_type=option_type),
+                view=AddPollTargetCategoryView(
+                    option_type=option_type,
+                    category_codes=_category_codes_for_thread(thread),
+                ),
                 ephemeral=True,
             )
             return

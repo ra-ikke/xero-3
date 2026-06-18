@@ -14,7 +14,7 @@ import discord
 from resources.category_list import CATEGORY_LIST
 from resources.channels import CHANNELS
 from resources.emoji import EMOJI_LIST
-from resources.get_tag import CATEGORY_TO_GROUP, get_tag_ids
+from resources.get_tag import CATEGORY_TO_GROUP, RACING_DISCUSSION_CODES, get_tag_ids
 from resources.status_list import STATUSES_BY_NAME
 from helpers.validation_utils import has_mapcrew_role, has_trial_mapcrew_role
 
@@ -27,11 +27,53 @@ def _find_category(code: str) -> Optional[dict]:
     return next((c for c in CATEGORY_LIST if c.get("name") == code), None)
 
 
+def _emoji_for_category_code(code: str, category: Optional[dict] = None) -> str:
+    """Prefer custom emoji from emoji.py (e.g. P27/P37) for public notifications."""
+    normalized = (code or "").strip().upper()
+    emoji_key = f"_{normalized}"
+    if emoji_key in EMOJI_LIST:
+        return EMOJI_LIST[emoji_key]
+    cat = category or _find_category(normalized)
+    if cat and cat.get("emoji"):
+        return str(cat["emoji"])
+    return ""
+
+
+def _format_public_category_label(code: str, category: Optional[dict] = None, *, bold_name: bool = True) -> str:
+    cat = category or _find_category(code)
+    name = (cat or {}).get("name") or code
+    emoji = _emoji_for_category_code(name, cat)
+    if bold_name:
+        return f"{emoji} (**{name}**)"
+    return f"{emoji} ({name})"
+
+
 def _category_to_group(code: str) -> Optional[str]:
     # Legacy mapping doesn't include P13, but it behaves as bootcamp for notifications.
     if code == "P13":
         return "bootcamp"
     return CATEGORY_TO_GROUP.get(code)
+
+
+def _extract_racing_target_code(chosen_line: str) -> Optional[str]:
+    """Reads P17/P27/P37 from a racing poll option line."""
+    perm_as_match = re.search(r"Perm as (P\d+)", chosen_line, re.IGNORECASE)
+    if perm_as_match:
+        code = perm_as_match.group(1).upper()
+        if code in RACING_DISCUSSION_CODES:
+            return code
+
+    bracket_match = re.search(r"\[[^\]]+\]\s*(.+)$", chosen_line)
+    if not bracket_match:
+        return None
+
+    tail = bracket_match.group(1).strip()
+    code_match = re.search(r"(P\d+)", tail, re.IGNORECASE)
+    if not code_match:
+        return None
+
+    code = code_match.group(1).upper()
+    return code if code in RACING_DISCUSSION_CODES else None
 
 
 def _extract_author_from_title(title: str) -> Optional[str]:
@@ -486,14 +528,14 @@ async def close_discussion_thread(
     if final_status == "MOVE":
         final_status_display = "**Moved to another category**"
         move_text = chosen_line.split("Move to", 1)[-1].strip() if "Move to" in chosen_line else ""
-        target_match = re.search(r"P\d+", move_text)
-        target_code = target_match.group(0) if target_match else None
+        target_match = re.search(r"(P\d+)", move_text, re.IGNORECASE)
+        target_code = target_match.group(1).upper() if target_match else None
         target_category = _find_category(target_code) if target_code else None
 
         if target_category:
             notification_content = (
-                f'{original_category["emoji"]} ({original_category["name"]}) → '
-                f'{target_category["emoji"]} ({target_category["name"]}) — '
+                f'{_format_public_category_label(original_category["name"], original_category, bold_name=False)} → '
+                f'{_format_public_category_label(target_category["name"], target_category, bold_name=False)} — '
                 f'{map_author} - {map_code} - {final_status_display}'
             )
             target_group = _category_to_group(target_category["name"])
@@ -503,7 +545,7 @@ async def close_discussion_thread(
             changelog_payload["target_category"] = target_category["name"]
         else:
             notification_content = (
-                f'{original_category["emoji"]} (**{original_category["name"]}**) — '
+                f'{_format_public_category_label(original_category["name"], original_category)} — '
                 f'{map_author} - {map_code} - {final_status_display}'
             )
             changelog_payload["category"] = original_category["name"]
@@ -512,7 +554,16 @@ async def close_discussion_thread(
         effective_code = original_category_code
 
         perm_as_match = re.search(r"Perm as (P\d+)", chosen_line, re.IGNORECASE)
-        if perm_as_match:
+        racing_target_code = _extract_racing_target_code(chosen_line)
+        if racing_target_code:
+            target_category = _find_category(racing_target_code)
+            if target_category:
+                effective_category = target_category
+                effective_code = racing_target_code
+                if racing_target_code != original_category_code:
+                    changelog_payload["original_category"] = original_category["name"]
+                    changelog_payload["target_category"] = target_category["name"]
+        elif perm_as_match:
             target_code = perm_as_match.group(1).upper()
             if target_code != original_category_code:
                 target_category = _find_category(target_code)
@@ -528,7 +579,7 @@ async def close_discussion_thread(
                 effective_code = "P13"
 
         notification_content = (
-            f'{effective_category["emoji"]} (**{effective_category["name"]}**) — '
+            f'{_format_public_category_label(effective_code, effective_category, bold_name=False)} — '
             f'{map_author} - {map_code} - {final_status_display}'
         )
         notification_group = _category_to_group(effective_code) or notification_group

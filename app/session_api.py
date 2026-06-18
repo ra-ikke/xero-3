@@ -34,7 +34,7 @@ from helpers.submission_panel import build_submission_panel_embed
 from helpers.submission_panel import parse_panel_footer
 from resources.category_list import CATEGORY_LIST
 from resources.channels import CHANNELS
-from resources.get_tag import CATEGORY_TO_GROUP
+from resources.get_tag import RACING_DISCUSSION_SENTINEL, resolve_discussion_category_code
 from service.map_service import draw_map_png, draw_map_url, fetch_map
 from ui.votecrew_review_view import VotecrewReviewView
 
@@ -471,10 +471,12 @@ async def _handle_post_discussion(request: web.Request) -> web.StreamResponse:
         or ""
     ).strip()
     category_code = normalize_category_code(raw_category)
-    if not category_code:
+    if raw_category.strip().upper() == RACING_DISCUSSION_SENTINEL:
+        category_code = RACING_DISCUSSION_SENTINEL
+    resolved_category = resolve_discussion_category_code(category_code or raw_category)
+    if not resolved_category:
         return web.json_response({"error": "missing_category"}, status=400)
-    if category_code not in CATEGORY_TO_GROUP:
-        return web.json_response({"error": "invalid_category", "category": category_code}, status=400)
+    category_code = resolved_category
 
     raw_disc_type = str(payload.get("discType") or payload.get("disc_type") or "").strip().upper()
     if not raw_disc_type:

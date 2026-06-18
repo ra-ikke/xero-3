@@ -278,6 +278,13 @@ CATEGORY_LIST = [
         "color": "#C3C3C3",
     },
     {
+        "name": "P27",
+        "description": "Retro Racing (P27)",
+        "picture": "https://i.imgur.com/vavqwda.png",
+        "emoji": EMOJI_LIST["_P27"],
+        "color": "#C32C12",
+    },
+    {
         "name": "P32",
         "description": "Double Shaman Test (P32)",
         "picture": "https://i.imgur.com/nd09QvE.png",
@@ -290,6 +297,20 @@ CATEGORY_LIST = [
         "picture": "https://i.imgur.com/7Pc6fHb.png",
         "emoji": EMOJI_LIST["_P34"],
         "color": "#C3C3C3",
+    },
+    {
+        "name": "P37",
+        "description": "Nitro Racing (P37)",
+        "picture": "https://i.imgur.com/zCSaGV3.png",
+        "emoji": EMOJI_LIST["_P37"],
+        "color": "#C32C12",
+    },
+    {
+        "name": "P38",
+        "description": "Racing Archive (P38)",
+        "picture": "https://i.imgur.com/HibNSyQ.png",
+        "emoji": EMOJI_LIST["_P38"],
+        "color": "#C32C12",
     },
     {
         "name": "P41",

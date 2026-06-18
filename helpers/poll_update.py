@@ -116,7 +116,7 @@ async def add_discussion_option(
             )
             return
         if option_type == "MOVE":
-            dynamic_description = f"Move to {cat.get('description', cat.get('name', target_category_code))}"
+            dynamic_description = f"Move to {cat.get('name', target_category_code)}"
         else:
             dynamic_description = f"Perm as {cat.get('name', target_category_code)}"
     elif option_type in {"MOVE", "PERM"}:

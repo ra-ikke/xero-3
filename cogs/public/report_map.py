@@ -142,7 +142,7 @@ class ReportMap(commands.Cog):
         )
         report_embed.set_image(url=image_url)
 
-        valid_discuss_categories = {"P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13", "P17", "P18", "P24"}
+        valid_discuss_categories = {"P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13", "P17", "P18", "P24", "P27", "P37"}
         view = ReportActionsViewDiscuss() if (map_data.map_type in valid_discuss_categories) else ReportActionsViewHandle()
 
         reports_channel = await interaction.client.fetch_channel(int(reports_channel_id))

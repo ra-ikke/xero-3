@@ -74,6 +74,25 @@ OPTIONS_MAPPING: dict[str, dict[str, list[dict[str, str]]]] = {
             {"option": "Deperm", "type": "DEPERM"},
         ],
     },
+    "racing": {
+        "PERM": [
+            {"option": "Perm as P17", "type": "PERM"},
+            {"option": "Perm as P27", "type": "PERM"},
+            {"option": "Perm as P37", "type": "PERM"},
+            {"option": "Low-Perm (P1)", "type": "REJECT"},
+            {"option": "Reject", "type": "REJECT"},
+        ],
+        "DEPERM": [
+            {"option": "Keep as is", "type": "KEEP"},
+            {"option": "Keep with edits", "type": "KEEP"},
+            {"option": "Deperm", "type": "DEPERM"},
+        ],
+        "EDIT": [
+            {"option": "Keep as is", "type": "KEEP"},
+            {"option": "Keep with edits", "type": "KEEP"},
+            {"option": "Deperm", "type": "DEPERM"},
+        ],
+    },
 }
 
 CATEGORY_MAPPING: dict[str, str] = {
@@ -84,7 +103,9 @@ CATEGORY_MAPPING: dict[str, str] = {
     "P8": "rotation",
     "P9": "rotation",
     "P12": "rotation",
-    "P17": "rotation",  # P17 (racing) uses the same options as rotation in the legacy mapping
+    "P17": "racing",
+    "P27": "racing",
+    "P37": "racing",
     "P18": "defilante",
     "P10": "survivor",
     "P11": "survivor",

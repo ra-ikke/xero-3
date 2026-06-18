@@ -46,6 +46,7 @@ TAGS_LIST: list[dict] = [
             {"id": "1131761928272887870", "name": "Deperm", "moderated": False, "emoji": {"id": "1130146688317784205", "name": None}},
             {"id": "1131761962078970028", "name": "Other", "moderated": False, "emoji": {"id": "1130135953718128773", "name": None}},
             {"id": "1131761625850970173", "name": "Racing (P17)", "moderated": False, "emoji": {"id": "1130135984307179610", "name": None}},
+            # Add Retro Racing (P27) and Nitro Racing (P37) forum tag ids when available on Discord.
         ],
     },
     {

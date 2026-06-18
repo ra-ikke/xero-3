@@ -12,17 +12,29 @@ from config import PRIVATE_SERVER_IDS
 from helpers.discussion import create_discussion
 from helpers.validation_utils import validate_map_code
 from resources.category_list import CATEGORY_LIST
-from resources.get_tag import CATEGORY_TO_GROUP
+from resources.get_tag import (
+    CATEGORY_TO_GROUP,
+    RACING_DISCUSSION_CODES,
+    RACING_DISCUSSION_SENTINEL,
+    resolve_discussion_category_code,
+)
 
 logger = logging.getLogger(__name__)
 
 _guild_objects = [discord.Object(id=server_id) for server_id in PRIVATE_SERVER_IDS] if PRIVATE_SERVER_IDS else []
 
+
 def _category_choices() -> list[app_commands.Choice[str]]:
     choices: list[app_commands.Choice[str]] = []
+    racing_added = False
     for cat in CATEGORY_LIST:
         code = cat.get("name")
         if not code or code not in CATEGORY_TO_GROUP:
+            continue
+        if code in RACING_DISCUSSION_CODES:
+            if not racing_added:
+                choices.append(app_commands.Choice(name="Racing", value=RACING_DISCUSSION_SENTINEL))
+                racing_added = True
             continue
         choices.append(app_commands.Choice(name=cat.get("description", code), value=code))
     return choices
@@ -89,6 +101,14 @@ class CreateDiscussion(commands.Cog):
                 return
             map_code = validation.formatted_code
 
+            category_code = resolve_discussion_category_code(category.value)
+            if not category_code:
+                await interaction.followup.send(
+                    content="Invalid category selected.",
+                    ephemeral=True,
+                )
+                return
+
             # Disc description logic (legacy behavior)
             if disc_type.value == "OTHER":
                 if not disc_description or not disc_description.strip():
@@ -104,7 +124,7 @@ class CreateDiscussion(commands.Cog):
             result = await create_discussion(
                 client=interaction.client,
                 map_code=map_code,
-                category_code=category.value,
+                category_code=category_code,
                 disc_type=disc_desc,
                 notify=notify,
                 user=interaction.user,
@@ -125,4 +145,3 @@ class CreateDiscussion(commands.Cog):
 async def setup(bot: commands.Bot):
     """Registers the cog."""
     await bot.add_cog(CreateDiscussion(bot))
-

@@ -19,10 +19,37 @@ CATEGORY_TO_GROUP: dict[str, str] = {
     "P11": "survivor",
     "P24": "survivor",
     "P17": "racing",
+    "P27": "racing",
+    "P37": "racing",
     "P18": "defilante",
     "P3": "bootcamp",
     "P13": "bootcamp",
 }
+
+# Sentinel for /create_discussion and POST /discussion (poll decides P17/P27/P37).
+RACING_DISCUSSION_SENTINEL = "RACING"
+RACING_DISCUSSION_CATEGORY_CODE = "P17"
+RACING_DISCUSSION_CODES: frozenset[str] = frozenset({"P17", "P27", "P37"})
+
+
+def resolve_discussion_category_code(category_code: str) -> Optional[str]:
+    """Normalizes a discussion category code, mapping Racing to the umbrella P17 thread."""
+    code = (category_code or "").strip().upper()
+    if not code:
+        return None
+    if code == RACING_DISCUSSION_SENTINEL:
+        return RACING_DISCUSSION_CATEGORY_CODE
+    if code in CATEGORY_TO_GROUP:
+        return code
+    return None
+
+
+def category_codes_for_group(group: str) -> list[str]:
+    """Returns discussion category codes that belong to the given forum group."""
+    return sorted(
+        [code for code, mapped in CATEGORY_TO_GROUP.items() if mapped == group],
+        key=lambda code: int(code[1:]) if len(code) > 1 and code[1:].isdigit() else 0,
+    )
 
 
 def get_tag_ids(
