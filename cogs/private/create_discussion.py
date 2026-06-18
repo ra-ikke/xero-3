@@ -14,8 +14,8 @@ from helpers.validation_utils import validate_map_code
 from resources.category_list import CATEGORY_LIST
 from resources.get_tag import (
     CATEGORY_TO_GROUP,
+    RACING_DISCUSSION_CATEGORY_CODE,
     RACING_DISCUSSION_CODES,
-    RACING_DISCUSSION_SENTINEL,
     resolve_discussion_category_code,
 )
 
@@ -33,7 +33,9 @@ def _category_choices() -> list[app_commands.Choice[str]]:
             continue
         if code in RACING_DISCUSSION_CODES:
             if not racing_added:
-                choices.append(app_commands.Choice(name="Racing", value=RACING_DISCUSSION_SENTINEL))
+                p17 = next((c for c in CATEGORY_LIST if c.get("name") == RACING_DISCUSSION_CATEGORY_CODE), None)
+                label = (p17 or {}).get("description", "Racing (P17)")
+                choices.append(app_commands.Choice(name=label, value=RACING_DISCUSSION_CATEGORY_CODE))
                 racing_added = True
             continue
         choices.append(app_commands.Choice(name=cat.get("description", code), value=code))

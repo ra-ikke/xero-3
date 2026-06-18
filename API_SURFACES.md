@@ -253,7 +253,7 @@ O acesso nao deve depender de `default_permissions` nativas de moderacao, a meno
 
 - `cogs/private/create_discussion.py`
   - comando: `/create_discussion`
-  - descricao: cria thread de discussao para mapa; **Racing** abre discussao no forum racing com poll PERM (Perm as P17/P27/P37, Low-Perm, Reject)
+  - descricao: cria thread de discussao para mapa; **Racing (P17)** abre discussao no forum racing com poll PERM (Perm as P17/P27/P37, Low-Perm, Reject)
 
 ## Views persistentes e componentes expostos
 
