@@ -212,7 +212,7 @@ Os cogs de producao sao carregados por `app/cogs_loader.py`, que ignora arquivos
 
 - `cogs/public/map_info.py`
   - comando: `/map_info`
-  - descricao: consulta metadados e preview de um mapa
+  - descricao: consulta metadados e preview de um mapa (preview como anexo PNG)
 
 - `cogs/public/report_map.py`
   - comando: `/report_map`

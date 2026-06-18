@@ -1,5 +1,6 @@
 """Cog that exposes the /mapinfo command."""
 import logging
+from io import BytesIO
 
 import discord
 from discord import app_commands
@@ -7,7 +8,7 @@ from discord.ext import commands
 
 from helpers.validation_utils import validate_map_code
 from resources.category_list import CATEGORY_LIST
-from service.map_service import draw_map_url, fetch_map
+from service.map_service import draw_map_png, fetch_map
 
 logger = logging.getLogger(__name__)
 
@@ -69,10 +70,9 @@ class MapInfo(commands.Cog):
             'raw': False
         }
 
-        image_url = await draw_map_url(payload)
-        if not image_url or not isinstance(image_url, str) or not image_url.startswith("http"):
+        image_bytes = await draw_map_png(payload)
+        if not image_bytes:
             logger.warning('Mapdraw failed for %s', normalized_code)
-            image_url = None
 
         category = next((cat for cat in CATEGORY_LIST if cat['name'] == map_data.map_type), None)
         category_emoji = category['emoji'] if category else '🗺️'
@@ -82,13 +82,15 @@ class MapInfo(commands.Cog):
             f'{map_data.maker or "Unknown Author"} - {normalized_code}'
         )
 
-        embed = discord.Embed()
-        if image_url:
-            embed.set_image(url=image_url)
+        files: list[discord.File] = []
+        if image_bytes:
+            buffer = BytesIO(image_bytes)
+            buffer.seek(0)
+            files.append(discord.File(buffer, filename=f'{normalized_code}.png'))
 
         await interaction.followup.send(
             content=content,
-            embed=embed if image_url else None,
+            files=files or None,
             ephemeral=is_private
         )
 
