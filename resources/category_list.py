@@ -362,3 +362,11 @@ CATEGORY_LIST = [
         "color": "#368DCB",
     },
 ]
+
+# Apply persisted runtime overrides (map limit / criteria) edited from the panel.
+try:
+    from resources.category_overrides import apply_overrides as _apply_category_overrides
+
+    _apply_category_overrides(CATEGORY_LIST)
+except Exception:  # pragma: no cover - overrides are best-effort
+    pass

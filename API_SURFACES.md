@@ -292,9 +292,24 @@ As views persistentes sao registradas em `bot.py`.
 - `map_submissions:{category}:start`
 - `map_submissions:{category}:update_category`
 - `map_submissions:{category}:download`
+- `map_submissions:{category}:review_here` — abre um chat temporario (thread privado em `session_manager`) para revisar cada mapa da sessao ativa dentro do Discord
 - `map_submissions:{category}:submit_review`
 - `map_submissions:{category}:edit_last_review`
 - `map_submissions:{category}:toggle_lock`
+- `map_submissions:{category}:set_limit` — modal para ajustar o limite de mapas por usuario/sessao (inteiro >= 1); reflete no painel e no topico publico
+- `map_submissions:{category}:edit_criteria` — modal para editar os criterios/regras (`submissionRules`) exibidos no bloco "About (Pxx)" do topico publico (uma regra por linha)
+
+Overrides de categoria editados por esses botoes sao persistidos em `resources/category_overrides.json` (campos permitidos: `submissionlimit`, `submissionRules`, `description`) e aplicados sobre `CATEGORY_LIST` no import (`resources/category_overrides.py`).
+
+### `ui/session_review_view.py`
+
+Fluxo de review in-Discord (alternativa ao upload de JSON). Views registradas por categoria em `bot.py`. Estado persistido nas proprias mensagens do thread de review (sem DB).
+
+- `session_review:{category}:finish` — compila as decisoes, posta o resultado no thread da categoria, fecha a sessao e cria a proxima (requer `manage_threads`/`manage_messages`)
+- `session_review:{category}:cancel` — descarta o chat de review sem postar
+- `session_review:{category}:decision` — select por mapa com a decisao (Left as is / P1'ed / Will be discussed / Ignored, conforme `decisions` da categoria)
+- `session_review:{category}:comment` — abre modal para editar o comentario publico do mapa
+- footers de estado: `session_review_control:{category}:{session_no}` (mensagem de controle) e `session_review_item:{category}:{code}:{decision}` (mensagem por mapa)
 
 ## Regras de manutencao desta documentacao
 

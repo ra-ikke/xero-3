@@ -92,6 +92,7 @@ def build_submission_panel_embed(
             "- **Start session**: creates or reuses the category thread and sets the active session.\n"
             "- **Update category**: refreshes the category thread embed and syncs panel info (limit/status).\n"
             "- **Download session**: downloads a JSON file with the session data.\n"
+            "- **Review here**: opens a temporary chat to review each map inside Discord, then posts and closes the session.\n"
             "- **Submit review**: you have to upload the JSON file from the app to post results into the category thread and close the session.\n"
             "- **Lock/Unlock thread**: toggles the thread lock; lock asks for a reason and updates the status here.\n"
         ),

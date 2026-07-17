@@ -64,6 +64,7 @@ async def main():
         from ui.close_discussion_view import CloseDiscussionView, PublicReviewActionsView
         from ui.report_actions import ReportActionsViewDiscuss, ReportActionsViewHandle
         from ui.map_submission_view import MapSubmissionPanelView
+        from ui.session_review_view import SessionReviewControlView, SessionReviewItemView
         from ui.votecrew_review_view import VotecrewReviewView
         from resources.channels import SUPPORTED_SUBMISSION_CATEGORIES
         bot.add_view(CloseDiscussionView())
@@ -74,6 +75,8 @@ async def main():
         for code in SUPPORTED_SUBMISSION_CATEGORIES:
             bot.add_view(MapSubmissionPanelView(code))
             bot.add_view(MapSubmissionPanelView(code, show_start=False))
+            bot.add_view(SessionReviewControlView(code))
+            bot.add_view(SessionReviewItemView(code))
         logger.info('Registered persistent views')
 
         # Optional local HTTP API for session JSON export.

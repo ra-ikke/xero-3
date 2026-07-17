@@ -14,10 +14,11 @@ from helpers.submission_facade import (
     get_or_create_category_thread,
     start_new_session,
     submit_review_and_close_session,
+    update_category_settings,
     _ensure_category_thread_embed,
 )
 from resources.emoji import EMOJI_LIST
-from helpers.submission_panel import build_submission_panel_embed
+from helpers.submission_panel import build_submission_panel_embed, _find_category
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,42 @@ class _EditLastReviewButton(_BaseSubmissionButton):
         if not await self._guard(interaction):
             return
         await edit_last_session_review(interaction, category_code=self.category_code)
+
+
+class _ReviewHereButton(_BaseSubmissionButton):
+    async def callback(self, interaction: discord.Interaction) -> None:  # type: ignore[override]
+        await interaction.response.defer(ephemeral=True)
+        if not await self._guard(interaction):
+            return
+        from helpers.session_review import start_session_review
+
+        await start_session_review(interaction, category_code=self.category_code)
+
+
+class _SetLimitButton(_BaseSubmissionButton):
+    async def callback(self, interaction: discord.Interaction) -> None:  # type: ignore[override]
+        if not _has_manage_permission(interaction):
+            await interaction.response.send_message(
+                "Missing permission (requires `manage_threads` or `manage_messages`).",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_modal(
+            _SetLimitModal(category_code=self.category_code, panel_message=interaction.message)
+        )
+
+
+class _EditCriteriaButton(_BaseSubmissionButton):
+    async def callback(self, interaction: discord.Interaction) -> None:  # type: ignore[override]
+        if not _has_manage_permission(interaction):
+            await interaction.response.send_message(
+                "Missing permission (requires `manage_threads` or `manage_messages`).",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_modal(
+            _EditCriteriaModal(category_code=self.category_code, panel_message=interaction.message)
+        )
 
 
 class _UpdateCategoryButton(_BaseSubmissionButton):
@@ -221,9 +258,17 @@ class MapSubmissionPanelView(discord.ui.View):
             )
         )
         self.add_item(
+            _ReviewHereButton(
+                label="Review here",
+                style=discord.ButtonStyle.primary,
+                custom_id=f"map_submissions:{category_code}:review_here",
+                category_code=category_code,
+            )
+        )
+        self.add_item(
             _SubmitReviewButton(
                 label="Submit review",
-                style=discord.ButtonStyle.primary,
+                style=discord.ButtonStyle.secondary,
                 custom_id=f"map_submissions:{category_code}:submit_review",
                 category_code=category_code,
             )
@@ -245,6 +290,22 @@ class MapSubmissionPanelView(discord.ui.View):
                 label=lock_label,
                 style=discord.ButtonStyle.secondary,
                 custom_id=f"map_submissions:{category_code}:toggle_lock",
+                category_code=category_code,
+            )
+        )
+        self.add_item(
+            _SetLimitButton(
+                label="Set map limit",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"map_submissions:{category_code}:set_limit",
+                category_code=category_code,
+            )
+        )
+        self.add_item(
+            _EditCriteriaButton(
+                label="Edit criteria",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"map_submissions:{category_code}:edit_criteria",
                 category_code=category_code,
             )
         )
@@ -339,4 +400,75 @@ class _LockReasonModal(discord.ui.Modal):
 
         await _refresh_panel_view(interaction, thread=self.thread, is_locked=True, panel_message=self.panel_message)
         await _send_temp_message(interaction, "🔒 Thread locked.")
+
+
+class _SetLimitModal(discord.ui.Modal):
+    def __init__(self, *, category_code: str, panel_message: discord.Message | None):
+        super().__init__(title="Set map limit")
+        self.category_code = category_code
+        self.panel_message = panel_message
+        cat = _find_category(category_code) or {}
+        current = cat.get("submissionlimit", 3)
+        try:
+            default = str(int(current)) if int(current) >= 1 else "3"
+        except Exception:
+            default = "3"
+        self.limit = discord.ui.TextInput(
+            label="Maps per user per session (>= 1)",
+            placeholder="e.g. 3",
+            required=True,
+            max_length=4,
+            default=default,
+        )
+        self.add_item(self.limit)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:  # type: ignore[override]
+        await interaction.response.defer(ephemeral=True)
+        raw = str(self.limit.value or "").strip()
+        try:
+            value = int(raw)
+        except Exception:
+            await safe_reply(interaction, "Invalid number. Please enter an integer >= 1.", ephemeral=True)
+            return
+        if value < 1:
+            await safe_reply(interaction, "The limit must be an integer >= 1.", ephemeral=True)
+            return
+        await update_category_settings(
+            interaction,
+            category_code=self.category_code,
+            updates={"submissionlimit": value},
+            panel_message=self.panel_message,
+            success_message=f"✅ Map limit updated to {value} map(s) per user.",
+        )
+
+
+class _EditCriteriaModal(discord.ui.Modal):
+    def __init__(self, *, category_code: str, panel_message: discord.Message | None):
+        super().__init__(title="Edit category criteria")
+        self.category_code = category_code
+        self.panel_message = panel_message
+        cat = _find_category(category_code) or {}
+        rules = cat.get("submissionRules") or []
+        default = "\n".join(str(r) for r in rules)
+        self.criteria = discord.ui.TextInput(
+            label="Criteria (one per line)",
+            placeholder="One rule/criterion per line. Shown in the public topic.",
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=4000,
+            default=default[:4000],
+        )
+        self.add_item(self.criteria)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:  # type: ignore[override]
+        await interaction.response.defer(ephemeral=True)
+        raw = str(self.criteria.value or "")
+        rules = [line.strip() for line in raw.splitlines() if line.strip()]
+        await update_category_settings(
+            interaction,
+            category_code=self.category_code,
+            updates={"submissionRules": rules},
+            panel_message=self.panel_message,
+            success_message="✅ Category criteria updated.",
+        )
 

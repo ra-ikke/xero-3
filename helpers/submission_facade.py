@@ -1193,6 +1193,67 @@ async def get_or_create_category_thread(
     return thread
 
 
+async def update_category_settings(
+    interaction: discord.Interaction,
+    *,
+    category_code: str,
+    updates: dict[str, Any],
+    panel_message: Optional[discord.Message] = None,
+    success_message: str = "✅ Category updated.",
+) -> None:
+    """Persists category overrides (map limit / criteria) and reflects them.
+
+    Updates the in-memory category, the public category thread embed and the
+    session-manager panel embed.
+    """
+    from resources.category_overrides import set_category_override
+
+    if not set_category_override(CATEGORY_LIST, category_code, updates):
+        await safe_reply(interaction, "Failed to update the category settings.", ephemeral=True)
+        return
+
+    try:
+        thread = await get_or_create_category_thread(interaction.client, category_code=category_code)
+    except Exception as exc:
+        await safe_reply(interaction, f"Saved, but I couldn't access the category thread: {exc}", ephemeral=True)
+        return
+
+    try:
+        await _ensure_category_thread_embed(thread, category_code=category_code)
+    except Exception:
+        logger.exception("Failed to refresh category thread embed for %s", category_code)
+
+    msg = panel_message or await _get_panel_message(interaction, category_code)
+    try:
+        if msg and msg.embeds:
+            meta = parse_panel_footer(getattr(msg.embeds[0].footer, "text", "") if msg.embeds[0].footer else "")
+            last_no = int(meta.get("last") or 0)
+            current_no = meta.get("current_no")
+            last_end = meta.get("last_end")
+            embed = build_submission_panel_embed(
+                category_code,
+                last_session_no=last_no,
+                current_thread_id=int(thread.id) if current_no else None,
+                current_session_no=int(current_no) if current_no else None,
+                is_locked=bool(thread.locked),
+                last_finished_ts=int(last_end) if last_end else None,
+            )
+            from ui.map_submission_view import MapSubmissionPanelView
+
+            await msg.edit(
+                embeds=[embed],
+                view=MapSubmissionPanelView(
+                    category_code,
+                    show_start=not bool(current_no),
+                    is_locked=bool(thread.locked),
+                ),
+            )
+    except Exception:
+        logger.exception("Failed to refresh panel embed after category update for %s", category_code)
+
+    await safe_reply(interaction, success_message, ephemeral=True)
+
+
 async def start_new_session(
     interaction: discord.Interaction,
     *,
