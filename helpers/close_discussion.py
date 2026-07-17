@@ -246,6 +246,22 @@ def _count_votes_from_reactions(message: discord.Message) -> dict[str, int]:
     return counts
 
 
+_KEYCAP_OPTIONS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
+
+
+def _normalize_option(option: str) -> str:
+    """Accepts a plain option number (e.g. "1") and maps it to the poll keycap emoji.
+
+    Non-numeric input (or an emoji already) is returned stripped, unchanged.
+    """
+    value = (option or "").strip()
+    if value.isdigit():
+        idx = int(value) - 1
+        if 0 <= idx < len(_KEYCAP_OPTIONS):
+            return _KEYCAP_OPTIONS[idx]
+    return value
+
+
 def _parse_poll_options(poll_content: str) -> list[str]:
     lines = [l for l in (poll_content or "").splitlines() if l.strip()]  # noqa: E741
     if not lines:
@@ -385,7 +401,7 @@ async def close_discussion_thread(
 
     if tie and not option:
         await interaction.followup.send(
-            content="The poll is tied. Please specify the closing option (e.g., 1️⃣).",
+            content="The poll is tied. Please specify the closing option number (e.g., 1).",
             ephemeral=True,
         )
         return
@@ -393,7 +409,7 @@ async def close_discussion_thread(
     chosen_line: Optional[str] = None
 
     if option:
-        option = option.strip()
+        option = _normalize_option(option)
         chosen_line = next((l for l in poll_lines if l.startswith(option)), None)  # noqa: E741
         if not chosen_line:
             await interaction.followup.send(

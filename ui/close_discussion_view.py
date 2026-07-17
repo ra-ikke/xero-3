@@ -56,10 +56,14 @@ class CloseModalBase(discord.ui.Modal):
     """Base modal that collects the closing option and optional description."""
 
     option = discord.ui.TextInput(
-        label="Option",
-        placeholder="Force a closing option when tied (e.g., 1️⃣). Leave empty to auto-pick.",
+        label="Option number",
+        placeholder=(
+            "Type the option number to force the result, e.g. 1.\n"
+            "Leave empty to auto-pick the most voted option."
+        ),
         required=False,
         max_length=32,
+        style=discord.TextStyle.paragraph,
     )
 
     def __init__(self, *, title: str, notify: bool):
