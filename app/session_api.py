@@ -691,11 +691,12 @@ async def _handle_post_review(request: web.Request) -> web.StreamResponse:
         embed.add_field(name="Status", value="Pending", inline=True)
 
         view = VotecrewReviewView()
-        first_content = chunks[0]
         try:
-            posted = await votecrew_channel.send(content=first_content, embed=embed, view=view, file=file)
-            for extra in chunks[1:]:
-                await votecrew_channel.send(content=extra)
+            # Post the (possibly long/multi-part) review content first, so the
+            # approval panel (embed + buttons + JSON) is always the LAST message.
+            for content in chunks:
+                await votecrew_channel.send(content=content)
+            posted = await votecrew_channel.send(embed=embed, view=view, file=file)
         except Exception:
             logger.exception("Failed to post votecrew review message")
             return web.json_response({"error": "failed_to_post_votecrew"}, status=500)
