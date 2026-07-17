@@ -17,7 +17,7 @@ from helpers.validation_utils import get_display_name, has_public_role, has_mapc
 from resources.category_list import CATEGORY_LIST
 from resources.channels import SUBMISSION_CHANNELS
 from resources.emoji import EMOJI_LIST
-from helpers.submission_panel import parse_panel_footer, build_submission_panel_embed
+from helpers.submission_panel import parse_panel_footer, build_submission_panel_embed, footer_matches_category
 from helpers.session_export import collect_session_maps, get_session_marker_state
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,8 @@ AUTO_CREATE_NEXT_SESSION = True
 
 
 def _find_category(code: str) -> Optional[dict[str, Any]]:
-    return next((c for c in CATEGORY_LIST if c.get("name") == code), None)
+    target = str(code or "").strip().upper()
+    return next((c for c in CATEGORY_LIST if str(c.get("name", "")).strip().upper() == target), None)
 
 
 def _br_now_str() -> str:
@@ -889,7 +890,7 @@ async def _get_panel_message(interaction: discord.Interaction, category_code: st
     bot_id = getattr(bot_user, "id", None)
     if msg and msg.embeds and bot_id and getattr(getattr(msg, "author", None), "id", None) == bot_id:
         footer = getattr(msg.embeds[0].footer, "text", "") if msg.embeds[0].footer else ""
-        if footer.startswith(f"map_submission_panel:{category_code}"):
+        if footer_matches_category(footer, category_code):
             return msg
 
     # 2) Fallback: scan session_manager for the latest bot-authored panel with our footer.
@@ -927,7 +928,7 @@ async def _get_panel_message(interaction: discord.Interaction, category_code: st
         if not m.embeds:
             continue
         footer = getattr(m.embeds[0].footer, "text", "") if m.embeds[0].footer else ""
-        if footer.startswith(f"map_submission_panel:{category_code}"):
+        if footer_matches_category(footer, category_code):
             return m
     return msg
 

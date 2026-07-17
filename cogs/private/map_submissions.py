@@ -105,7 +105,7 @@ class MapSubmissions(commands.Cog):
                 # Guard against stale/incorrect panels by checking the title
                 # contains the category code as a whole token (avoid P6 vs P66).
                 title = str(embed.title or "")
-                pattern = rf"\\b{re.escape(category_code)}\\b"
+                pattern = rf"\b{re.escape(category_code)}\b"
                 if not re.search(pattern, title):
                     continue
                 if category_code not in existing_by_category:
@@ -141,7 +141,6 @@ class MapSubmissions(commands.Cog):
                     current_session_no = meta.get("current_no")  # type: ignore[assignment]
                     last_finished_ts = meta.get("last_end")  # type: ignore[assignment]
 
-                show_start = last_no <= 0 and not current_thread_id
                 is_locked = None
                 if not isinstance(last_finished_ts, int):
                     last_finished_ts = None
@@ -153,6 +152,14 @@ class MapSubmissions(commands.Cog):
                         is_locked = bool(getattr(thread, "locked", False))
                         bot_user_id = getattr(getattr(interaction.client, "user", None), "id", None)
                         state = await get_session_marker_state(thread=thread, history_limit=2000, bot_user_id=bot_user_id)
+                        # Reconstruct the active session from the thread markers, so the
+                        # panel state survives even if the panel footer was lost/recreated.
+                        if state.get("is_active"):
+                            active_no = state.get("last_session_no")
+                            if active_no:
+                                current_thread_id = int(thread.id)
+                                current_session_no = int(active_no)
+                                last_no = max(last_no, int(active_no))
                         last_end_message_id = state.get("last_end_message_id")
                         if last_end_message_id:
                             try:
@@ -163,6 +170,8 @@ class MapSubmissions(commands.Cog):
                                 last_finished_ts = None
                 except Exception:
                     is_locked = None
+
+                show_start = last_no <= 0 and not current_thread_id
 
                 embed = build_submission_panel_embed(
                     category,

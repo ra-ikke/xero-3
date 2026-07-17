@@ -30,7 +30,7 @@ from helpers.submission_facade import (
     get_category_thread,
     post_review_results_and_close_thread,
 )
-from helpers.submission_panel import build_submission_panel_embed, parse_panel_footer
+from helpers.submission_panel import build_submission_panel_embed, footer_matches_category, parse_panel_footer
 from helpers.validation_utils import get_display_name
 from resources.category_list import CATEGORY_LIST
 
@@ -510,7 +510,7 @@ async def _finalize_panel_after_review(
     if not panel_msg or not panel_msg.embeds:
         return
     footer_text = getattr(panel_msg.embeds[0].footer, "text", "") if panel_msg.embeds[0].footer else ""
-    if not footer_text.startswith(f"map_submission_panel:{category_code}"):
+    if not footer_matches_category(footer_text, category_code):
         return
 
     meta = parse_panel_footer(footer_text)

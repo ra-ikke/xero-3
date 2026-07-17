@@ -19,7 +19,10 @@ FIELD_CURRENT_SESSION = "Current session"
 
 
 def _find_category(code: str) -> Optional[dict]:
-    return next((c for c in CATEGORY_LIST if c.get("name") == code), None)
+    # Normalize to avoid missing the category (and dropping its emoji/icon) when
+    # the code arrives with different casing/whitespace (e.g. from the API).
+    target = str(code or "").strip().upper()
+    return next((c for c in CATEGORY_LIST if str(c.get("name", "")).strip().upper() == target), None)
 
 
 def build_panel_footer(
@@ -67,6 +70,15 @@ def parse_panel_footer(text: str) -> dict[str, Optional[int] | str]:
             except Exception:
                 out[k] = None
     return out
+
+
+def footer_matches_category(text: str, category_code: str) -> bool:
+    """Exact category match for a panel footer.
+
+    Avoids false positives like P6 matching P66 (a plain
+    ``startswith("map_submission_panel:P6")`` would also match ``...:P66|...``).
+    """
+    return str(parse_panel_footer(text).get("category_code") or "").strip() == str(category_code).strip()
 
 
 def build_submission_panel_embed(

@@ -17,7 +17,7 @@ from helpers.submission_facade import (
     post_review_results_and_close_thread,
     _start_new_session_for_panel,
 )
-from helpers.submission_panel import build_submission_panel_embed, parse_panel_footer
+from helpers.submission_panel import build_submission_panel_embed, footer_matches_category, parse_panel_footer
 from helpers.validation_utils import has_mapcrew_role, has_public_role
 from resources.channels import CHANNELS
 
@@ -71,7 +71,7 @@ async def _find_panel_message_and_meta(
         if not m.embeds:
             continue
         footer = getattr(m.embeds[0].footer, "text", "") if m.embeds[0].footer else ""
-        if not footer.startswith(f"map_submission_panel:{category_code}"):
+        if not footer_matches_category(footer, category_code):
             continue
         return m, parse_panel_footer(footer)
 

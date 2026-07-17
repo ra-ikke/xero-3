@@ -31,7 +31,7 @@ from helpers.submission_facade import (
     _start_new_session_for_panel,
 )
 from helpers.submission_panel import build_submission_panel_embed
-from helpers.submission_panel import parse_panel_footer
+from helpers.submission_panel import parse_panel_footer, footer_matches_category
 from resources.category_list import CATEGORY_LIST
 from resources.channels import CHANNELS
 from resources.get_tag import RACING_DISCUSSION_SENTINEL, resolve_discussion_category_code
@@ -163,7 +163,7 @@ async def _find_panel_message_and_meta(
         if not m.embeds:
             continue
         footer = getattr(m.embeds[0].footer, "text", "") if m.embeds[0].footer else ""
-        if not footer.startswith(f"map_submission_panel:{category_code}"):
+        if not footer_matches_category(footer, category_code):
             continue
         return m, parse_panel_footer(footer)
 
