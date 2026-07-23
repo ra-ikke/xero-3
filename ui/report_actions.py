@@ -10,9 +10,8 @@ from typing import Optional
 import discord
 
 from helpers.discussion import create_discussion
-from helpers.embed_utils import create_reply_embed
 from helpers.interaction_utils import extract_report_info
-from helpers.validation_utils import get_display_name
+from helpers.validation_utils import get_display_name, has_public_role
 from resources.emoji import EMOJI_LIST
 
 logger = logging.getLogger(__name__)
@@ -22,6 +21,30 @@ _FIELD_MESSAGE_REFERENCE = "📝 Message Reference"
 _FIELD_STATUS = "📊 Status"
 _FIELD_MAPCREW = "👥 MapCrew"
 _FIELD_MAPCREW_NOTE = "📝 MapCrew note"
+
+
+def _private_server_handler_label(user: discord.abc.User) -> str:
+    """Label shown on the private reports channel.
+
+    Public mapcrews keep their nick. Private mapcrews show
+    ``Private Member (nick)`` so staff can identify who handled it without
+    exposing that nick on the public reply.
+    """
+    member = user if isinstance(user, discord.Member) else None
+    if not member:
+        return str(user)
+    if has_public_role(member):
+        return get_display_name(member)
+    nick = member.nick or getattr(member, "global_name", None) or member.name
+    return f"Private Member ({nick})"
+
+
+def _public_handler_label(user: discord.abc.User) -> str:
+    """Label shown on the public original-report reply (never exposes private nick)."""
+    member = user if isinstance(user, discord.Member) else None
+    if not member:
+        return "Private Member"
+    return get_display_name(member)
 
 
 @dataclass(frozen=True)
@@ -54,8 +77,8 @@ def _updated_report_embed(
     color_hex: str,
     optional_message: Optional[str],
 ) -> discord.Embed:
-    # Preserve all existing fields and update/add MapCrew-related fields.
-    updated = embed.copy()
+    # Preserve all existing fields (map details/image/etc.) and update/add MapCrew-related fields.
+    updated = discord.Embed.from_dict(embed.to_dict())
     updated.clear_fields()
 
     has_mapcrew = False
@@ -155,13 +178,13 @@ async def _handle_report_action(
         await interaction.followup.send(content="Could not find a message reference in the report.", ephemeral=True)
         return
 
-    member = interaction.user if isinstance(interaction.user, discord.Member) else None
-    display_name = get_display_name(member) if member else str(interaction.user)
+    private_label = _private_server_handler_label(interaction.user)
+    public_label = _public_handler_label(interaction.user)
 
     updated_embed = _updated_report_embed(
         embed=embed,
         status_value=f"{status_emoji} {status_text}",
-        display_name=display_name,
+        display_name=private_label,
         color_hex=status_color,
         optional_message=optional_message,
     )
@@ -174,7 +197,7 @@ async def _handle_report_action(
     await _reply_to_original_report(
         interaction.client,
         ref,
-        display_name=display_name,
+        display_name=public_label,
         action=action,
         color=status_color,
         emoji=status_emoji,

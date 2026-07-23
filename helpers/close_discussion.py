@@ -17,6 +17,7 @@ from resources.emoji import EMOJI_LIST
 from resources.get_tag import CATEGORY_TO_GROUP, RACING_DISCUSSION_CODES, get_tag_ids
 from resources.status_list import STATUSES_BY_NAME
 from helpers.validation_utils import has_mapcrew_role, has_trial_mapcrew_role
+from service.map_service import draw_map_url, fetch_map
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ def _extract_author_from_title(title: str) -> Optional[str]:
     return match.group(1).strip() or None
 
 
-async def _download_url_as_file(url: str, filename: str) -> Optional[discord.File]:
+async def _download_url_bytes(url: str) -> Optional[bytes]:
     if not url or not isinstance(url, str) or not url.startswith("http"):
         return None
     try:
@@ -93,14 +94,59 @@ async def _download_url_as_file(url: str, filename: str) -> Optional[discord.Fil
                 if resp.status != 200:
                     logger.warning("Image download failed (%s): %s", resp.status, url)
                     return None
-                data = await resp.read()
+                return await resp.read()
     except Exception:
         logger.exception("Failed to download image: %s", url)
         return None
 
+
+async def _download_url_as_file(url: str, filename: str) -> Optional[discord.File]:
+    data = await _download_url_bytes(url)
+    if not data:
+        return None
     buffer = BytesIO(data)
     buffer.seek(0)
     return discord.File(buffer, filename=filename)
+
+
+def _file_from_bytes(data: bytes, filename: str) -> discord.File:
+    buffer = BytesIO(data)
+    buffer.seek(0)
+    return discord.File(buffer, filename=filename)
+
+
+async def _resolve_map_image_bytes(
+    map_code: str, existing_url: Optional[str]
+) -> tuple[Optional[bytes], Optional[str]]:
+    """Returns (image_bytes, usable_url).
+
+    Prefer re-downloading the existing embed URL; if it expired (common with
+    temporary mapdraw CDN links), regenerate a fresh preview.
+    """
+    if existing_url:
+        data = await _download_url_bytes(existing_url)
+        if data:
+            return data, existing_url
+
+    try:
+        map_data = await fetch_map(map_code)
+        if not map_data:
+            return None, existing_url
+        fresh_url = await draw_map_url({"code": map_code, "xml": map_data.xml, "raw": False})
+        if not fresh_url:
+            return None, existing_url
+        data = await _download_url_bytes(fresh_url)
+        return data, fresh_url
+    except Exception:
+        logger.exception("Failed to regenerate map image for %s", map_code)
+        return None, existing_url
+
+
+def _closer_display_name(user: discord.abc.User) -> str:
+    member = user if isinstance(user, discord.Member) else None
+    if member:
+        return member.nick or getattr(member, "global_name", None) or member.name
+    return str(getattr(user, "global_name", None) or getattr(user, "name", None) or user)
 
 
 async def _fetch_discussion_messages(
@@ -447,11 +493,33 @@ async def close_discussion_thread(
     final_status = status_match.group(1).strip().upper()
     status_obj = STATUSES_BY_NAME.get(final_status)
 
-    new_embed = embed.copy()
-    new_embed.description = f"Status: [{final_status}]"
+    closed_by = _closer_display_name(interaction.user)
+    new_embed = discord.Embed.from_dict(embed.to_dict())
+    new_embed.description = f"Status: [{final_status}]\nClosed by: **{closed_by}**"
     if status_obj:
         new_embed.color = int(status_obj["color"].replace("#", "0x"), 16)
-    await disc_info.edit(embeds=[new_embed])
+
+    # Re-attach the map image as a message file. External mapdraw URLs expire, and
+    # editing the embed without a fresh attachment is what makes the preview vanish.
+    image_filename = f"{map_code.lstrip('@')}.png"
+    image_bytes, fresh_image_url = await _resolve_map_image_bytes(map_code, map_image_url)
+    if fresh_image_url:
+        map_image_url = fresh_image_url
+    try:
+        if image_bytes:
+            new_embed.set_image(url=f"attachment://{image_filename}")
+            await disc_info.edit(
+                embeds=[new_embed],
+                attachments=[_file_from_bytes(image_bytes, image_filename)],
+            )
+        else:
+            await disc_info.edit(embeds=[new_embed])
+    except Exception:
+        logger.exception("Failed to update discussion embed for thread %s", thread.id)
+        try:
+            await disc_info.edit(embeds=[new_embed])
+        except Exception:
+            logger.exception("Fallback embed edit also failed for thread %s", thread.id)
 
     # Remove discussion controls (buttons) before locking/archiving.
     # Discord does not allow editing messages inside archived threads (50083).
@@ -615,17 +683,18 @@ async def close_discussion_thread(
             sanitized.append(clean)
         review_embeds = sanitized
 
-    if notify and notification_channel_id and map_image_url:
+    if notify and notification_channel_id and (image_bytes or map_image_url):
         try:
             notify_channel = await interaction.client.fetch_channel(int(notification_channel_id))
             if isinstance(notify_channel, discord.abc.Messageable):
-                if review_embeds:
-                    image_file = await _download_url_as_file(map_image_url, f"{map_code}.png")
+                if image_bytes:
+                    files = [_file_from_bytes(image_bytes, image_filename)]
+                else:
+                    image_file = await _download_url_as_file(map_image_url or "", image_filename)
                     files = [image_file] if image_file else []
+                if review_embeds:
                     await notify_channel.send(content=notification_content, files=files, embeds=review_embeds)
                 else:
-                    image_file = await _download_url_as_file(map_image_url, f"{map_code}.png")
-                    files = [image_file] if image_file else []
                     await notify_channel.send(content=notification_content, files=files)
         except Exception:
             logger.exception("Failed to send notification for %s", map_code)

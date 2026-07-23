@@ -263,6 +263,7 @@ As views persistentes sao registradas em `bot.py`.
 
 - `close_discussion:close`
 - `close_discussion:close_notify`
+  - ao fechar, o embed da discussao passa a incluir `Closed by: <nick>` e a imagem do mapa e reanexada como ficheiro (evita sumir por URL expirada do mapdraw)
 - `discussion_controls:refresh_info`
 - `discussion_controls:add_public_review`
 - `discussion_controls:update_mapcode`
@@ -276,6 +277,7 @@ As views persistentes sao registradas em `bot.py`.
 - `report_actions:discard`
 - `report_actions:discuss`
 - `report_actions:handle`
+  - no canal privado (`mc_reports`), MapCrew privado aparece como `Private Member (nick)`; na resposta publica ao report original, apenas `Private Member` (sem nick). Detalhes do mapa no embed privado sao preservados.
 - modais:
   - `report_actions:discard_modal`
   - `report_actions:handle_modal`
